@@ -4,45 +4,45 @@
 ### TODO: move helper functions into their own file
 
 #' Extracts row-wise dot products
-#' 
+#'
 #' @param mat numeric matrix; represents covariates/features for each individual
 #' @param coef numeric matrix; represents coefficients corresponding to each of the covariates in `mat`
 #' @param n integer; sample size
-#' 
+#'
 #' @return Returns a numeric vector of linear predictors, one per individual. Returns a vector of zeroes if there are no predictors.
-#' 
+#'
 #' @keywords internal
 .get_linear_predictor <- function(mat, coef, n) {
   if (is.null(mat) || length(coef) == 0) {
     return(rep(0, n))
   }
   else{
-    drop(mat %*% coef) 
+    drop(mat %*% coef)
   }
 }
 
 #' Logistic function as used in confounded treatment assignment
-#' 
+#'
 #' @param x numeric vector
-#' 
+#'
 #' @return Element-wise logistic function.
-#' 
+#'
 #' @keywords internal
 .logistic_function <- function(x){
   return(1 / (1 + exp(- x )))
 }
 
 #' Gives the inverse generator function for the Gumbel-Hougaard Copula with parameter `theta`.
-#' 
+#'
 #' @param t numeric; dummy variable of the inverse generator \eqn{1/\phi}
-#' @param theta numeric \eqn{>=} 1; Gumbel-Hougaard association parameter 
-#' 
-#' @return 
+#' @param theta numeric \eqn{>=} 1; Gumbel-Hougaard association parameter
+#'
+#' @return
 #' Gives the inverse generator.
-#' 
+#'
 #' @details
 #' Recreated from the `gumbel` package. See package documentation for details.
-#' 
+#'
 #' @keywords internal
 .invphigumbel <- function(t, theta = 1) {
   exp(-t^(1/theta))
@@ -56,14 +56,14 @@
 #'
 #' @details
 #' This mirrors the construction of the `gumbel.jeong` function used in the `cWR` package. For even more details, see the manual for R package `gumbel`.
-#' 
+#'
 #' @keywords internal
 .draw_gumbel_uniforms <- function(n, theta = 1) {
 
   # We are only interested in generating a bivariate vector for now
   # Will look to expand to more than two outcomes in the future
   dim <- 2L
-  
+
   # Generate positive-stable latent term
   beta <- 1 / theta
   unifpirand <- runif(n, 0, pi)
@@ -73,11 +73,11 @@
     (sin(beta * unifpirand)) /
     (sin(unifpirand))^(1 / beta)
   stablerand <- stablerand / (exprand2^(theta - 1))
-  
+
   # Inverse Gumbel-Hougaard transformation
   # This returns an n x 2 matrix of uniforms with GH(theta) dependence.
   u_mat <- .invphigumbel(exprand / stablerand, theta)
-  
+
   return(u_mat)
 }
 
@@ -174,14 +174,14 @@ simulate_dataset <- function(
     lambda_C, beta_A_C,
     phi_admin
 ) {
-  
+
   # Validate treatment assignment argument
   treat_assign <- match.arg(treat_assign)
-  
+
   #---------------------------
   # 1. GENERATE COVARIATES
   #---------------------------
-  
+
   # Generate measured covariate matrix X (N x p)
   if (p > 0) {
     X_mat <- sapply(1:p, function(j) {
@@ -191,7 +191,7 @@ simulate_dataset <- function(
   } else {
     X_mat <- NULL
   }
-  
+
   # Generate unmeasured covariate matrix U (N x q)
   if (q > 0) {
     U_mat <- sapply(1:q, function(j) {
@@ -201,11 +201,11 @@ simulate_dataset <- function(
   } else {
     U_mat <- NULL
   }
-  
+
   #---------------------------
   # 2. TREATMENT ASSIGNMENT
   #---------------------------
-  
+
   # Generate treatment vector A (N x 1)
   if (treat_assign == "randomized") {
     # Simulate randomized "coin-flip" assignment
@@ -217,53 +217,59 @@ simulate_dataset <- function(
       .get_linear_predictor(U_mat, alpha_U, N)
     A <- rbinom(N, size = 1, prob = .logistic_function(lp_treat))
   }
-  
+
   #---------------------------
   # 3. COPULA
   #---------------------------
-  
+
   # Sample (V_H, V_D) ~ GH(theta_copula), where V_H,V_D are marginal Uniform(0,1)
   V_mat <- .draw_gumbel_uniforms(N, theta_copula)
   V_H <- V_mat[, 1]
   V_D <- V_mat[, 2]
-  
+
   #---------------------------
   # 4. WEIBULL PARAMETERS
   #---------------------------
-  
+
   # Fatal Weibull scale parameter
   Lambda_D <- lambda_D *
     exp(beta_A_D * A +
           .get_linear_predictor(X_mat, beta_X_D, N) +
           .get_linear_predictor(U_mat, beta_U_D, N))
   # Non-fatal Weibull scale parameter
-  Lambda_H <- lambda_H * 
-    exp(beta_A_H * A + 
-          .get_linear_predictor(X_mat, beta_X_H, N) + 
+  Lambda_H <- lambda_H *
+    exp(beta_A_H * A +
+          .get_linear_predictor(X_mat, beta_X_H, N) +
           .get_linear_predictor(U_mat, beta_U_H, N))
-  
+
   #---------------------------
   # 5. DERIVE EVENT TIMES
   #---------------------------
-  
+
   # Latent fatal event time
   T_D <- ( -log(V_D) / Lambda_D )^(1 / kappa_D)
   # Latent non-fatal event time
-  T_H <- ( -log(V_H) / Lambda_H )^(1 / kappa_H)  
-  
+  T_H <- ( -log(V_H) / Lambda_H )^(1 / kappa_H)
+
   #---------------------------
   # 6. GENERATE CENSORING
   #---------------------------
-  
-  # Censoring rate
-  Lambda_C <- lambda_C * exp(-beta_A_C * A)
-  # Censoring variable
-  C <- rexp(N, rate = Lambda_C)
-  
+
+  # If lambda_C is non-positive...
+  if (isTRUE(lambda_C <= 0)) {
+    # Interpret as "no random censoring" (C is infinite)...
+    C <- rep.int(Inf, N)
+  } else {
+    # Otherwise, calculate censoring rate and censoring variable...
+    Lambda_C <- lambda_C * exp(-beta_A_C * A)
+    # ... keeping Lambda_C positive in case non-positive rates are accidentally generated
+    C <- rexp(N, rate = pmax(Lambda_C, .Machine$double.eps))
+  }
+
   #---------------------------
   # 7. OBSERVED EVENT DATA
   #---------------------------
-  
+
   # Observed fatal event data
   Y_D <- pmin(T_D, C, phi_admin)
   delta_D <- as.integer(T_D <= pmin(C, phi_admin))
@@ -272,17 +278,17 @@ simulate_dataset <- function(
   delta_H <- as.integer(
     (T_H <= T_D) & (T_H <= C) & (T_H <= phi_admin)
   )
-  
+
   # Time-to-first-event endpoint
   Y_tfe <- pmin(T_H, T_D, C, phi_admin)
   delta_tfe <- as.integer(
     pmin(T_H, T_D) <= pmin(C, phi_admin)
   )
-  
+
   #---------------------------
   # 8. ASSEMBLE DATA
   #---------------------------
-  
+
   # Create output data-frame
   output_df <- data.frame(
     id = seq_len(N),
@@ -294,7 +300,7 @@ simulate_dataset <- function(
     Y_tfe = Y_tfe,
     delta_tfe = delta_tfe
   )
-  
+
   # Attach measured covariates
   if (p > 0) {
     output_df <- cbind(
@@ -310,6 +316,6 @@ simulate_dataset <- function(
     )
   }
   rownames(output_df) <- NULL
-  
+
   return(output_df)
 }

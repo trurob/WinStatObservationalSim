@@ -25,20 +25,20 @@
 #' @keywords internal
 .count_positions <- function(ctrl_sorted, q) {
   m <- length(ctrl_sorted)
-  
+
   if (m == 0L) {
     zeros <- rep.int(0L, length(q))
     return(list(lt = zeros, le = zeros, eq = zeros, gt = zeros))
   }
-  
+
   # lower_bound (strictly less): left.open = TRUE
   lt <- findInterval(q, ctrl_sorted, left.open = TRUE)
   # upper_bound (≤): left.open = FALSE
   le <- findInterval(q, ctrl_sorted, left.open = FALSE)
-  
+
   eq <- le - lt
   gt <- m - le
-  
+
   list(
     lt = lt,
     le = le,
@@ -68,7 +68,7 @@
 .prep_control_death <- function(Y_D_c, delta_D_c) {
   c1_idx <- which(delta_D_c == 1L)
   c0_idx <- which(delta_D_c == 0L)
-  
+
   list(
     d_ctrl_sorted = sort(Y_D_c[c1_idx]),
     m1 = length(c1_idx),
@@ -97,7 +97,7 @@
 .prep_control_hosp_nodeath <- function(Y_H_c0, delta_H_c0) {
   c0h1_idx <- which(delta_H_c0 == 1L)
   c0h0_idx <- which(delta_H_c0 == 0L)
-  
+
   list(
     h_ctrl_sorted = sort(Y_H_c0[c0h1_idx]),
     m0h1 = length(c0h1_idx),
@@ -129,33 +129,33 @@
 .count_stage_death <- function(Y_D_t, delta_D_t, d_ctrl_sorted, m1, m0) {
   t1_idx <- which(delta_D_t == 1L)  # treated w/ death
   t0_idx <- which(delta_D_t == 0L)  # treated w/o death
-  
+
   wins <- 0
   losses <- 0
   ties <- 0
-  
+
   # Treated with NO death: win vs all controls who died.
   n0 <- length(t0_idx)
   if (n0 > 0L && m1 > 0L) {
     wins <- wins + n0 * m1
   }
-  
+
   # Treated with death: compare ordering vs controls with death, and lose vs controls with no death.
   n1 <- length(t1_idx)
   if (n1 > 0L) {
     q <- Y_D_t[t1_idx]
     pos <- .count_positions(d_ctrl_sorted, q)
-    
+
     # Wins: control's death strictly later (gt)
     wins <- wins + sum(pos$gt)
-    
+
     # Losses: control's death strictly earlier (lt) + all controls with no death (m0)
     losses <- losses + sum(pos$lt) + n1 * m0
-    
+
     # Ties at death (equal times)
     ties <- ties + sum(pos$eq)
   }
-  
+
   list(
     wins = as.double(wins),
     losses = as.double(losses),
@@ -182,11 +182,11 @@
 .count_stage_hosp <- function(Y_H_t0, delta_H_t0, h_ctrl_sorted, m0h1, m0h0) {
   t0h1_idx <- which(delta_H_t0 == 1L)  # treated hospitalized (within no-death)
   t0h0_idx <- which(delta_H_t0 == 0L)  # treated not hospitalized (within no-death)
-  
+
   wins <- 0
   losses <- 0
   ties <- 0
-  
+
   # Treated NOT hospitalized: win vs all controls who are hospitalized; tie vs controls not hospitalized.
   n0h0 <- length(t0h0_idx)
   if (n0h0 > 0L) {
@@ -197,23 +197,23 @@
       ties <- ties + n0h0 * m0h0
     }
   }
-  
+
   # Treated hospitalized: compare ordering vs control hospitalized, and lose vs controls not hospitalized.
   n0h1 <- length(t0h1_idx)
   if (n0h1 > 0L) {
     q <- Y_H_t0[t0h1_idx]
     pos <- .count_positions(h_ctrl_sorted, q)
-    
+
     # Earlier hospitalization is worse → treated wins when control hospitalized later (gt)
     wins <- wins + sum(pos$gt)
-    
+
     # Treated loses when control hospitalized earlier (lt) and whenever control not hospitalized
     losses <- losses + sum(pos$lt) + n0h1 * m0h0
-    
+
     # Ties at hospitalization (equal times)
     ties <- ties + sum(pos$eq)
   }
-  
+
   list(
     wins = as.double(wins),
     losses = as.double(losses),
@@ -234,7 +234,7 @@
 #' @details
 #' Uses the code infrastructure developed in the `WINS` package under the GPLv3 license.
 #' Uses an all-against-all pairwise comparison approach against a fatal/non-fatal composite hierarchical outcome to determine winners/losers/and ties. Equal times are counted as ties.
-#'  
+#'
 #'
 #' @param treated `data.frame`; containing the columns: `Y_D`, `delta_D`, `Y_H`, `delta_H`
 #'   for the treated arm.
@@ -249,8 +249,8 @@
 #'   }
 #'
 #' @export
-.get_true_WR <- function(treated, control) {
-  
+get_true_WR <- function(treated, control) {
+
   # Grab relevant data, save into vectors, and grab sizes
   Y_D_t <- as.numeric(treated$Y_D)
   delta_D_t <- as.integer(treated$delta_D)
@@ -263,12 +263,12 @@
   n_t <- length(Y_D_t)
   n_c <- length(Y_D_c)
   total_pairs <- as.double(n_t) * as.double(n_c)
-  
+
   #---------------------------
   # 1. COMPARE FATAL
   #---------------------------
   ctrl_death <- .prep_control_death(Y_D_c, delta_D_c)
-  
+
   death_counts <- .count_stage_death(
     Y_D_t = Y_D_t,
     delta_D_t = delta_D_t,
@@ -276,21 +276,21 @@
     m1 = ctrl_death$m1,
     m0 = ctrl_death$m0
   )
-  
+
   # Subsets that proceed to hospitalization: no-death on both sides
   t0_idx <- death_counts$t0_idx
   c0_idx <- ctrl_death$c0_idx
-  
+
   Y_H_t0 <- Y_H_t[t0_idx]
   delta_H_t0 <- delta_H_t[t0_idx]
   Y_H_c0 <- Y_H_c[c0_idx]
   delta_H_c0 <- delta_H_c[c0_idx]
-  
+
   #---------------------------
   # 2. COMPARE NON-FATAL
   #---------------------------
   ctrl_hosp <- .prep_control_hosp_nodeath(Y_H_c0, delta_H_c0)
-  
+
   hosp_counts <- .count_stage_hosp(
     Y_H_t0 = Y_H_t0,
     delta_H_t0 = delta_H_t0,
@@ -298,19 +298,19 @@
     m0h1 = ctrl_hosp$m0h1,
     m0h0 = ctrl_hosp$m0h0
   )
-  
+
   #---------------------------
   # 3. COMBINE RESULTS
   #---------------------------
-  
+
   treated_wins <- death_counts$wins + hosp_counts$wins
   control_wins <- death_counts$losses + hosp_counts$losses
   ties <- death_counts$ties + hosp_counts$ties
-  
+
   pi_T <- treated_wins / total_pairs
   pi_C <- control_wins / total_pairs
   wr <- pi_T / max(pi_C, .Machine$double.eps)
-  
+
   list(
     treated_wins = treated_wins,
     control_wins = control_wins,
