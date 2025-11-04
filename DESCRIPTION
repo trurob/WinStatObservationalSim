@@ -1,11 +1,24 @@
 Package: WinStatObservationalSim
-Title: What the Package Does (One Line, Title Case)
-Version: 0.0.0.9000
+Title: Win Statistics in Observational Studies
+Version: 0.0.1
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+    person("Robert", "Trujillo", , "trurob888@gmail.com", role = c("aut", "cre"))
+Description: Simulates an observational dataset with two treatment arms,
+    (un)measured covariates, and semi-competing (possibly correlated)
+    time-to-event outcomes; Computes a "true" win ratio via Monte Carlo
+    simulation.
 License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
     license
+URL: https://github.com/<your-username>/WinStatObservationalSim
+BugReports: 
+    https://github.com/<your-username>/WinStatObservationalSim/issues
 Encoding: UTF-8
+Language: en-US
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Imports: 
+    stats,
+    utils
