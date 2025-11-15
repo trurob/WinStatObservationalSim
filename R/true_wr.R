@@ -130,14 +130,14 @@
   t1_idx <- which(delta_D_t == 1L)  # treated w/ death
   t0_idx <- which(delta_D_t == 0L)  # treated w/o death
 
-  wins <- 0
-  losses <- 0
-  ties <- 0
+  wins <- 0.0
+  losses <- 0.0
+  ties <- 0.0
 
   # Treated with NO death: win vs all controls who died.
   n0 <- length(t0_idx)
   if (n0 > 0L && m1 > 0L) {
-    wins <- wins + n0 * m1
+    wins <- wins + as.double(n0) * as.double(m1)
   }
 
   # Treated with death: compare ordering vs controls with death, and lose vs controls with no death.
@@ -147,19 +147,19 @@
     pos <- .count_positions(d_ctrl_sorted, q)
 
     # Wins: control's death strictly later (gt)
-    wins <- wins + sum(pos$gt)
+    wins <- wins + sum(as.double(pos$gt))
 
     # Losses: control's death strictly earlier (lt) + all controls with no death (m0)
-    losses <- losses + sum(pos$lt) + n1 * m0
+    losses <- losses + sum(as.double(pos$lt)) + as.double(n1) * as.double(m0)
 
     # Ties at death (equal times)
-    ties <- ties + sum(pos$eq)
+    ties <- ties + sum(as.double(pos$eq))
   }
 
   list(
-    wins = as.double(wins),
-    losses = as.double(losses),
-    ties = as.double(ties),
+    wins = wins,
+    losses = losses,
+    ties = ties,
     t0_idx = t0_idx
   )
 }
@@ -183,18 +183,18 @@
   t0h1_idx <- which(delta_H_t0 == 1L)  # treated hospitalized (within no-death)
   t0h0_idx <- which(delta_H_t0 == 0L)  # treated not hospitalized (within no-death)
 
-  wins <- 0
-  losses <- 0
-  ties <- 0
+  wins <- 0.0
+  losses <- 0.0
+  ties <- 0.0
 
   # Treated NOT hospitalized: win vs all controls who are hospitalized; tie vs controls not hospitalized.
   n0h0 <- length(t0h0_idx)
   if (n0h0 > 0L) {
     if (m0h1 > 0L) {
-      wins <- wins + n0h0 * m0h1
+      wins <- wins + as.double(n0h0) * as.double(m0h1)
     }
     if (m0h0 > 0L) {
-      ties <- ties + n0h0 * m0h0
+      ties <- ties + as.double(n0h0) * as.double(m0h0)
     }
   }
 
@@ -205,19 +205,19 @@
     pos <- .count_positions(h_ctrl_sorted, q)
 
     # Earlier hospitalization is worse → treated wins when control hospitalized later (gt)
-    wins <- wins + sum(pos$gt)
+    wins <- wins + sum(as.double(pos$gt))
 
     # Treated loses when control hospitalized earlier (lt) and whenever control not hospitalized
-    losses <- losses + sum(pos$lt) + n0h1 * m0h0
+    losses <- losses + sum(as.double(pos$lt)) + as.double(n0h1) * as.double(m0h0)
 
     # Ties at hospitalization (equal times)
-    ties <- ties + sum(pos$eq)
+    ties <- ties + sum(as.double(pos$eq))
   }
 
   list(
-    wins = as.double(wins),
-    losses = as.double(losses),
-    ties = as.double(ties)
+    wins = wins,
+    losses = losses,
+    ties = ties
   )
 }
 

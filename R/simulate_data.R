@@ -13,7 +13,7 @@
 #'
 #' @keywords internal
 .get_linear_predictor <- function(mat, coef, n) {
-  if (is.null(mat) || length(coef) == 0) {
+  if (is.null(mat) || length(coef) == 0L) {
     return(rep(0, n))
   }
   else{
@@ -183,7 +183,7 @@ simulate_dataset <- function(
   #---------------------------
 
   # Generate measured covariate matrix X (N x p)
-  if (p > 0) {
+  if (p > 0L) {
     X_mat <- sapply(1:p, function(j) {
       rnorm(N, mean = mu_X[j], sd = sd_X[j])
     })
@@ -193,7 +193,7 @@ simulate_dataset <- function(
   }
 
   # Generate unmeasured covariate matrix U (N x q)
-  if (q > 0) {
+  if (q > 0L) {
     U_mat <- sapply(1:q, function(j) {
       rnorm(N, mean = mu_U[j], sd = sd_U[j])
     })
@@ -256,7 +256,7 @@ simulate_dataset <- function(
   #---------------------------
 
   # If lambda_C is non-positive...
-  if (isTRUE(lambda_C <= 0)) {
+  if (isTRUE(lambda_C <= 0L)) {
     # Interpret as "no random censoring" (C is infinite)...
     C <- rep.int(Inf, N)
   } else {
@@ -302,14 +302,14 @@ simulate_dataset <- function(
   )
 
   # Attach measured covariates
-  if (p > 0) {
+  if (p > 0L) {
     output_df <- cbind(
       output_df,
       as.data.frame(X_mat, optional = TRUE)
     )
   }
   # Attach unmeasured covariates
-  if (q > 0) {
+  if (q > 0L) {
     output_df <- cbind(
       output_df,
       as.data.frame(U_mat, optional = TRUE)
