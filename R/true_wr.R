@@ -146,11 +146,11 @@
     q <- Y_D_t[t1_idx]
     pos <- .count_positions(d_ctrl_sorted, q)
 
-    # Wins: control's death strictly later (gt)
-    wins <- wins + sum(as.double(pos$gt))
+    # Wins: control's death strictly earlier than treated (lt)
+    wins <- wins + sum(as.double(pos$lt))
 
-    # Losses: control's death strictly earlier (lt) + all controls with no death (m0)
-    losses <- losses + sum(as.double(pos$lt)) + as.double(n1) * as.double(m0)
+    # Losses: control's death strictly later than treated (gt) and all controls with no death (m0)
+    losses <- losses + sum(as.double(pos$gt)) + as.double(n1) * as.double(m0)
 
     # Ties at death (equal times)
     ties <- ties + sum(as.double(pos$eq))
@@ -204,11 +204,11 @@
     q <- Y_H_t0[t0h1_idx]
     pos <- .count_positions(h_ctrl_sorted, q)
 
-    # Earlier hospitalization is worse → treated wins when control hospitalized later (gt)
-    wins <- wins + sum(as.double(pos$gt))
+    # Wins: controls hospitalized strictly earlier than treated (lt)
+    wins <- wins + sum(as.double(pos$lt))
 
-    # Treated loses when control hospitalized earlier (lt) and whenever control not hospitalized
-    losses <- losses + sum(as.double(pos$lt)) + as.double(n0h1) * as.double(m0h0)
+    # Losses: Controls hospitalized strictly later (gt) and controls never hospitalized
+    losses <- losses + sum(as.double(pos$gt)) + as.double(n0h1) * as.double(m0h0)
 
     # Ties at hospitalization (equal times)
     ties <- ties + sum(as.double(pos$eq))
