@@ -128,6 +128,8 @@
 #' @param lambda_C numeric; baseline censoring rate.
 #' @param beta_A_C numeric; treatment effect on censoring rate.
 #' @param phi_admin numeric; administrative censoring time.
+#' @param incl_latent boolean; default FALSE; additionally includes latent event times in the output dataset.
+#' @param incl_tfe boolean: default FALSE; additionally includes calculated time-to-first-event variables in the output dataset.
 #'
 #' @return
 #' A \code{data.frame} object with columns:
@@ -138,10 +140,12 @@
 #' \item \code{delta_D}: oberved fatal event indicator
 #' \item \code{Y_H}: observed time to non-fatal event
 #' \item \code{delta_H}: observed non-fatal event indicator
-#' \item \code{Y_tfe}: observed time to first event
-#' \item \code{delta_tfe}: observed time to first event indicator
 #' \item \code{X_1}, ..., \code{X_p}: measured covariates
 #' \item \code{U_1}, ..., \code{U_q}: unmeasured covariates
+#' \item \code{Y_tfe}: observed time to first event (if \code{incl_tfe} is set to \code{TRUE})
+#' \item \code{delta_tfe}: observed time to first event indicator (if \code{incl_tfe} is set to \code{TRUE})
+#' \item\code{T_D}: latent time to fatal event (if \code{incl_latent} is set to \code{TRUE})
+#' \item\code{T_H}: latent time to non-fatal event (if \code{incl_latent} is set to \code{TRUE})
 #' }
 #'
 #' @details
@@ -172,7 +176,9 @@ simulate_dataset <- function(
     lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
     theta_copula,
     lambda_C, beta_A_C,
-    phi_admin
+    phi_admin,
+    incl_tfe = FALSE,
+    incl_latent = FALSE
 ) {
 
   # Validate treatment assignment argument
@@ -279,12 +285,6 @@ simulate_dataset <- function(
     (T_H <= T_D) & (T_H <= C) & (T_H <= phi_admin)
   )
 
-  # Time-to-first-event endpoint
-  Y_tfe <- pmin(T_H, T_D, C, phi_admin)
-  delta_tfe <- as.integer(
-    pmin(T_H, T_D) <= pmin(C, phi_admin)
-  )
-
   #---------------------------
   # 8. ASSEMBLE DATA
   #---------------------------
@@ -296,25 +296,31 @@ simulate_dataset <- function(
     Y_D = Y_D,
     delta_D = delta_D,
     Y_H = Y_H,
-    delta_H = delta_H,
-    Y_tfe = Y_tfe,
-    delta_tfe = delta_tfe
+    delta_H = delta_H
   )
 
   # Attach measured covariates
   if (p > 0L) {
-    output_df <- cbind(
-      output_df,
-      as.data.frame(X_mat, optional = TRUE)
-    )
+    output_df <- cbind(output_df, as.data.frame(X_mat, optional = TRUE))
   }
   # Attach unmeasured covariates
   if (q > 0L) {
-    output_df <- cbind(
-      output_df,
-      as.data.frame(U_mat, optional = TRUE)
-    )
+    output_df <- cbind(output_df, as.data.frame(U_mat, optional = TRUE))
   }
+  # Attach time-to-first-event variables if incl_tfe is set to TRUE
+  if (incl_tfe == TRUE){
+    # Calculate time-to-first-event endpoint
+    Y_tfe <- pmin(T_H, T_D, C, phi_admin)
+    delta_tfe <- as.integer(pmin(T_H, T_D) <= pmin(C, phi_admin))
+    # Attach it to the output
+    output_df <- cbind(output_df, Y_tfe, delta_tfe)
+  }
+
+  # Attach latent event times if incl_latent is set to TRUE
+  if (incl_latent == TRUE){
+    output_df <- cbind(output_df, T_D, T_H)
+  }
+
   rownames(output_df) <- NULL
 
   return(output_df)
