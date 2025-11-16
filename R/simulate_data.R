@@ -68,7 +68,7 @@
   beta <- 1 / theta
   unifpirand <- runif(n, 0, pi)
   exprand <- matrix(rexp(dim * n), nrow = n, ncol = dim)
-  exprand2   <- rexp(n)
+  exprand2 <- rexp(n)
   stablerand <- sin((1 - beta) * unifpirand)^((1 - beta) / beta) *
     (sin(beta * unifpirand)) /
     (sin(unifpirand))^(1 / beta)
@@ -253,9 +253,12 @@ simulate_dataset <- function(
   #---------------------------
 
   # Latent fatal event time
-  T_D <- ( -log(V_D) / Lambda_D )^(1 / kappa_D)
+  # T_D <- ( -log(V_D) / Lambda_D )^(1 / kappa_D) ERRONIOUS
+  T_D <- (-log(V_D))^(1 / kappa_D) / Lambda_D
   # Latent non-fatal event time
-  T_H <- ( -log(V_H) / Lambda_H )^(1 / kappa_H)
+  # T_H <- ( -log(V_H) / Lambda_H )^(1 / kappa_H) ERRONIOUS
+  T_H <- (-log(V_H))^(1 / kappa_H) / Lambda_H
+
 
   #---------------------------
   # 6. GENERATE CENSORING
