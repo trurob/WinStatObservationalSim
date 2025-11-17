@@ -84,29 +84,40 @@
 #' Generate a covariate matrix with Normal and Bernoulli columns
 #'
 #' @param N integer; sample size.
-#' @param p integer; number of covariates.
-#' @param dist character vector length p; entries should be either "Normal" or "Bernoulli". Designates the distributions each covariate belongs to.
-#' If NULL and p > 0, defaults to all "Normal".
-#' @param mu numeric vector length p; means for Normal covariates; indices should match with the "Normal" indices in the \code{dist} argument; ignores "Bernoulli" indices.
-#' @param sd numeric vector length p; SDs for Normal covariates; indices should match with the "Normal" indices in the \code{dist} argument; ignores "Bernoulli" indices.
-#' @param prob numeric vector length p; success probabilities for Bernoulli covariates that must lie in (0,1); indices should match with the "Bernoulli" indices in the \code{dist} argument; ignores "Normal" indices.
-#' @param prefix character, prefix to be used for column names in the generated dataset, i.e. "X" will generate columns  "X_1", "X_2", ...
+#' @param p integer; number of covariates. If NULL or <= 0, returns NULL.
+#' @param dist character vector length p; entries should be either "Normal" or "Bernoulli".
+#'   Designates the distributions each covariate belongs to.
+#'   If NULL and p > 0, defaults to all "Normal".
+#' @param mu numeric vector length p; means for Normal covariates; indices should
+#'   match with the "Normal" indices in the \code{dist} argument; ignored for
+#'   "Bernoulli" indices. Can be NULL if there are no Normal covariates.
+#' @param sd numeric vector length p; SDs for Normal covariates; indices should
+#'   match with the "Normal" indices in the \code{dist} argument; ignored for
+#'   "Bernoulli" indices. Can be NULL if there are no Normal covariates.
+#' @param prob numeric vector length p; success probabilities for Bernoulli
+#'   covariates that must lie in (0,1); indices should match with the "Bernoulli"
+#'   indices in the \code{dist} argument; ignored for "Normal" indices. Can be
+#'   NULL if there are no Bernoulli covariates.
+#' @param prefix character, prefix to be used for column names in the generated
+#'   dataset, i.e. "X" will generate columns "X_1", "X_2", ...
 #'
 #' @return
-#' A numeric matrix of dimension N x p, with columns named paste0(prefix, "_", 1:p). Returns NULL if p == 0.
+#' A numeric matrix of dimension N x p, with columns named paste0(prefix, "_", 1:p).
+#' Returns NULL if p is NULL or p == 0.
 #'
 #' @keywords internal
 .generate_covariate_matrix <- function(
     N,
-    p,
+    p = NULL,
     dist = NULL,
-    mu, sd,
+    mu = NULL,
+    sd = NULL,
     prob = NULL,
     prefix = "X"
 ) {
 
   # If no covariates: return NULL
-  if (p <= 0L) {
+  if (is.null(p) || p <= 0L) {
     return(NULL)
   }
 
@@ -140,13 +151,12 @@
   if (any(dist == "Bernoulli") && is.null(prob)) {
     stop("Some covariates have dist == 'Bernoulli', but 'prob' is NULL.")
   }
-  if (any(dist == "Normal") && (is.null(mu) || is.null(sd)) ) {
+  if (any(dist == "Normal") && (is.null(mu) || is.null(sd))) {
     stop("Some covariates have dist == 'Normal', but 'mu' or 'sd' is NULL.")
   }
 
-
   # Allocate matrix, and set column names appropriately
-  mat <- matrix(NA, nrow = N, ncol = p)
+  mat <- matrix(NA_real_, nrow = N, ncol = p)
   colnames(mat) <- paste0(prefix, "_", seq_len(p))
 
   # Generate the requisite variables for each column...
@@ -154,7 +164,7 @@
     # ... If we are generating a Normal random variable...
     if (dist[j] == "Normal") {
 
-      # ... Double check if the parameters for the variable isn't missing
+      # ... Double check if the parameters for the variable aren't missing
       if (is.null(mu) || is.null(sd) || is.na(mu[j]) || is.na(sd[j])) {
         stop("Normal covariate ", prefix, "_", j, " requires non-missing mu and sd.")
       }
@@ -281,7 +291,7 @@
 #' @export
 simulate_dataset <- function(
     N,
-    p, q,
+    p = NULL, q = NULL,
     X_dist = NULL,
     U_dist = NULL,
     mu_X = NULL, sd_X = NULL,
@@ -292,14 +302,20 @@ simulate_dataset <- function(
     alpha_0 = 0,
     alpha_X = NULL,
     alpha_U = NULL,
-    lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-    lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
+    lambda_H, kappa_H, beta_A_H,
+    beta_X_H = NULL, beta_U_H = NULL,
+    lambda_D, kappa_D, beta_A_D,
+    beta_X_D = NULL, beta_U_D = NULL,
     theta_copula = 1L,
-    lambda_C, beta_A_C,
-    phi_admin,
+    lambda_C = NULL, beta_A_C = NULL,
+    phi_admin = NULL,
     incl_tfe = FALSE,
     incl_latent = FALSE
 ) {
+
+  # Treat NULL p, q as "no covariates"
+  if (is.null(p)) p <- 0L
+  if (is.null(q)) q <- 0L
 
   # Validate treatment assignment argument
   treat_assign <- match.arg(treat_assign)
@@ -375,25 +391,24 @@ simulate_dataset <- function(
   #---------------------------
 
   # Latent fatal event time
-  # T_D <- ( -log(V_D) / Lambda_D )^(1 / kappa_D) ERRONIOUS
   T_D <- (-log(V_D))^(1 / kappa_D) / Lambda_D
   # Latent non-fatal event time
-  # T_H <- ( -log(V_H) / Lambda_H )^(1 / kappa_H) ERRONIOUS
   T_H <- (-log(V_H))^(1 / kappa_H) / Lambda_H
-
 
   #---------------------------
   # 6. GENERATE CENSORING
   #---------------------------
 
-  # If lambda_C is non-positive...
-  if (isTRUE(lambda_C <= 0L)) {
-    # Interpret as "no random censoring" (C is infinite)...
+  # No administrative censoring if phi_admin is NULL
+  phi <- if (is.null(phi_admin)) Inf else phi_admin
+
+  # No random censoring if lambda_C or beta_A_C is NULL
+  if (is.null(lambda_C) || is.null(beta_A_C)) {
+    C <- rep.int(Inf, N)
+  } else if (lambda_C <= 0L) {
     C <- rep.int(Inf, N)
   } else {
-    # Otherwise, calculate censoring rate and censoring variable...
     Lambda_C <- lambda_C * exp(-beta_A_C * A)
-    # ... keeping Lambda_C positive in case non-positive rates are accidentally generated
     C <- rexp(N, rate = pmax(Lambda_C, .Machine$double.eps))
   }
 
@@ -402,12 +417,13 @@ simulate_dataset <- function(
   #---------------------------
 
   # Observed fatal event data
-  Y_D <- pmin(T_D, C, phi_admin)
-  delta_D <- as.integer(T_D <= pmin(C, phi_admin))
+  Y_D <- pmin(T_D, C, phi)
+  delta_D <- as.integer(T_D <= pmin(C, phi))
+
   # Observed non-fatal event data:
-  Y_H <- pmin(T_H, T_D, C, phi_admin)
+  Y_H <- pmin(T_H, T_D, C, phi)
   delta_H <- as.integer(
-    (T_H <= T_D) & (T_H <= C) & (T_H <= phi_admin)
+    (T_H <= T_D) & (T_H <= C) & (T_H <= phi)
   )
 
   #---------------------------
@@ -432,11 +448,12 @@ simulate_dataset <- function(
   if (q > 0L) {
     output_df <- cbind(output_df, as.data.frame(U_mat, optional = TRUE))
   }
+
   # Attach time-to-first-event variables if incl_tfe is set to TRUE
   if (incl_tfe == TRUE){
     # Calculate time-to-first-event endpoint
-    Y_tfe <- pmin(T_H, T_D, C, phi_admin)
-    delta_tfe <- as.integer(pmin(T_H, T_D) <= pmin(C, phi_admin))
+    Y_tfe <- pmin(T_H, T_D, C, phi)
+    delta_tfe <- as.integer(pmin(T_H, T_D) <= pmin(C, phi))
     # Attach it to the output
     output_df <- cbind(output_df, Y_tfe, delta_tfe)
   }
