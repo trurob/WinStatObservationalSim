@@ -116,7 +116,7 @@
 #' @param alpha_U numeric vector length q; coefficients for U in treatment model.
 #' @param lambda_D numeric; baseline hazard rate for fatal outcome.
 #' @param kappa_D numeric; Weibull shape parameter for marginal time-to-fatal outcome. Becomes Exponentially distributed when equal to 1.
-#' @param beta_A_D numeric; treatment log-HR effect on fatal outcome.
+#' @param beta_A_D numeric; treatment effect on fatal outcome; greater than zero decreases hazard.
 #' @param beta_X_D numeric vector length p; measured covariate effects on time-to-fatal outcome.
 #' @param beta_U_D numeric vector length q; unmeasured covariate effects on time-to-fatal outcome.
 #' @param lambda_H numeric; baseline hazard rate for time-to-non-fatal outcome.
@@ -149,13 +149,16 @@
 #' }
 #'
 #' @details
-#' Weibull PH form:
-#'   S_D(t|A,X,U) = exp( - (Lambda_D * t)^kappa_D ),
-#'   Lambda_D = lambda_D * exp(beta_A_D*A + beta_X_D^T X + beta_U_D^T U).
+#' Weibull form:
+#'   S_D(t | A, X, U) = exp( - (Lambda_D * t)^kappa_D ),
+#'   where
+#'   Lambda_D = lambda_D * exp( - (beta_A_D * A +
+#'                                  beta_X_D^T X +
+#'                                  beta_U_D^T U) ).
 #'
 #' Event time simulation via inverse transform:
-#'   T_D = ( -log(V_D) / Lambda_D )^(1/kappa_D ),
-#'   given V_D ~ U(0,1).
+#'   T_D = (-log(V_D))^(1 / kappa_D) / Lambda_D,
+#'   given V_D ~ U(0, 1).
 #'
 #' Joint dependence across (T_H, T_D) is induced by sampling
 #' a bivariate (V_H, V_D) from a Gumbel–Hougaard copula with parameter
@@ -239,13 +242,13 @@ simulate_dataset <- function(
 
   # Fatal Weibull scale parameter
   Lambda_D <- lambda_D *
-    exp(beta_A_D * A +
-          .get_linear_predictor(X_mat, beta_X_D, N) +
+    exp(- beta_A_D * A -
+          .get_linear_predictor(X_mat, beta_X_D, N) -
           .get_linear_predictor(U_mat, beta_U_D, N))
   # Non-fatal Weibull scale parameter
   Lambda_H <- lambda_H *
-    exp(beta_A_H * A +
-          .get_linear_predictor(X_mat, beta_X_H, N) +
+    exp(- beta_A_H * A -
+          .get_linear_predictor(X_mat, beta_X_H, N) -
           .get_linear_predictor(U_mat, beta_U_H, N))
 
   #---------------------------
