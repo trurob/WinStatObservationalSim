@@ -176,7 +176,7 @@
     else if (dist[j] == "Bernoulli") {
 
       # ... Double check if the parameter for the variable isn't missing or out of bounds
-      if (is.na(prob[j]) || prob[j] <= 0 || prob[j] >= 1) {
+      if (is.null(prob) || is.na(prob[j]) || prob[j] <= 0 || prob[j] >= 1) {
         stop("Bernoulli covariate ", prefix, "_", j, " requires a probability in (0, 1).")
       }
       # ... Generate the Bernoulli random variable
@@ -403,9 +403,7 @@ simulate_dataset <- function(
   phi <- if (is.null(phi_admin)) Inf else phi_admin
 
   # No random censoring if lambda_C or beta_A_C is NULL
-  if (is.null(lambda_C) || is.null(beta_A_C)) {
-    C <- rep.int(Inf, N)
-  } else if (lambda_C <= 0L) {
+  if (is.null(lambda_C) || is.null(beta_A_C) || lambda_C <= 0L) {
     C <- rep.int(Inf, N)
   } else {
     Lambda_C <- lambda_C * exp(-beta_A_C * A)
