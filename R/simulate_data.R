@@ -81,6 +81,109 @@
   return(u_mat)
 }
 
+#' Generate a covariate matrix with Normal and Bernoulli columns
+#'
+#' @param N integer; sample size.
+#' @param p integer; number of covariates.
+#' @param dist character vector length p; entries should be either "Normal" or "Bernoulli". Designates the distributions each covariate belongs to.
+#' If NULL and p > 0, defaults to all "Normal".
+#' @param mu numeric vector length p; means for Normal covariates; indices should match with the "Normal" indices in the \code{dist} argument; ignores "Bernoulli" indices.
+#' @param sd numeric vector length p; SDs for Normal covariates; indices should match with the "Normal" indices in the \code{dist} argument; ignores "Bernoulli" indices.
+#' @param prob numeric vector length p; success probabilities for Bernoulli covariates that must lie in (0,1); indices should match with the "Bernoulli" indices in the \code{dist} argument; ignores "Normal" indices.
+#' @param prefix character, prefix to be used for column names in the generated dataset, i.e. "X" will generate columns  "X_1", "X_2", ...
+#'
+#' @return
+#' A numeric matrix of dimension N x p, with columns named paste0(prefix, "_", 1:p). Returns NULL if p == 0.
+#'
+#' @keywords internal
+.generate_covariate_matrix <- function(
+    N,
+    p,
+    dist = NULL,
+    mu, sd,
+    prob = NULL,
+    prefix = "X"
+) {
+
+  # If no covariates: return NULL
+  if (p <= 0L) {
+    return(NULL)
+  }
+
+  # Default to Normal if distribution not supplied
+  if (is.null(dist)) {
+    dist <- rep("Normal", p)
+  }
+
+  # Error checks for improper length of parameter vectors
+  if (length(dist) != p) {
+    stop("Length of 'dist' (", length(dist), ") must equal p (", p, ").")
+  }
+  if (!is.null(mu) && length(mu) != p) {
+    stop("Length of 'mu' (", length(mu), ") must equal p (", p, ").")
+  }
+  if (!is.null(sd) && length(sd) != p) {
+    stop("Length of 'sd' (", length(sd), ") must equal p (", p, ").")
+  }
+  if (!is.null(prob) && length(prob) != p) {
+    stop("Length of 'prob' (", length(prob), ") must equal p (", p, ").")
+  }
+
+  # Dist argument must be either "Normal" or "Bernoulli", enforce this
+  dist <- match.arg(
+    dist,
+    choices = c("Normal", "Bernoulli"),
+    several.ok = TRUE
+  )
+
+  # Make sure argument vectors are populated for respective distributions
+  if (any(dist == "Bernoulli") && is.null(prob)) {
+    stop("Some covariates have dist == 'Bernoulli', but 'prob' is NULL.")
+  }
+  if (any(dist == "Normal") && (is.null(mu) || is.null(sd)) ) {
+    stop("Some covariates have dist == 'Normal', but 'mu' or 'sd' is NULL.")
+  }
+
+
+  # Allocate matrix, and set column names appropriately
+  mat <- matrix(NA, nrow = N, ncol = p)
+  colnames(mat) <- paste0(prefix, "_", seq_len(p))
+
+  # Generate the requisite variables for each column...
+  for (j in seq_len(p)) {
+    # ... If we are generating a Normal random variable...
+    if (dist[j] == "Normal") {
+
+      # ... Double check if the parameters for the variable isn't missing
+      if (is.null(mu) || is.null(sd) || is.na(mu[j]) || is.na(sd[j])) {
+        stop("Normal covariate ", prefix, "_", j, " requires non-missing mu and sd.")
+      }
+      # ... Generate the Normal random variable
+      mat[, j] <- rnorm(N, mean = mu[j], sd = sd[j])
+
+    }
+    # ... If we are generating a Bernoulli random variable...
+    else if (dist[j] == "Bernoulli") {
+
+      # ... Double check if the parameter for the variable isn't missing or out of bounds
+      if (is.na(prob[j]) || prob[j] <= 0 || prob[j] >= 1) {
+        stop("Bernoulli covariate ", prefix, "_", j, " requires a probability in (0, 1).")
+      }
+      # ... Generate the Bernoulli random variable
+      mat[, j] <- rbinom(N, size = 1L, prob = prob[j])
+
+    }
+    # ... Else the distribution supplied doesn't match the required ones
+    else {
+      stop("Improper distribution specified")
+    }
+  }
+
+  # Return the desired matrix
+  return(mat)
+
+}
+
 
 ############################################
 # ------------ MAIN FUNCTIONS ------------ #
@@ -106,10 +209,20 @@
 #' @param N integer; sample size for this data set.
 #' @param p integer; number of measured covariates.
 #' @param q Integer; number of unmeasured covariates.
+#' @param X_dist character vector length p; distribution type for each measured covariate, with entries being one of "Normal" or "Bernoulli". If NULL, all measured covariates are generated as Normal.
+#' @param U_dist character vector length q; distribution type for each unmeasured covariate, with entries being one of "Normal" or "Bernoulli". If NULL, all unmeasured covariates are generated as Normal.
 #' @param mu_X numeric vector length p; means for measured covariates.
+#' Positions in the vector should match the positions in the \code{X_dist} argument whose entries are "Normal". All other entries will be ignored. Can be \code{NULL} if there are no "Normal" entries in \code{X_dist}.
 #' @param sd_X numeric vector length p; SDs for measured covariates.
+#' Positions in the vector should match the positions in the \code{X_dist} argument whose entries are "Normal". All other entries will be ignored. Can be \code{NULL} if there are no "Normal" entries in \code{X_dist}.
 #' @param mu_U numeric vector length q; means for unmeasured covariates.
+#' Positions in the vector should match the positions in the \code{U_dist} argument whose entries are "Normal". All other entries will be ignored. Can be \code{NULL} if there are no "Normal" entries in \code{U_dist}.
 #' @param sd_U numeric vector length q; SDs for unmeasured covariates.
+#' Positions in the vector should match the positions in the \code{U_dist} argument whose entries are "Normal". All other entries will be ignored. Can be \code{NULL} if there are no "Normal" entries in \code{U_dist}.
+#' @param prob_X numeric vector length p; success probabilities for measured Bernoulli covariates. Must lie in (0,1).
+#' Positions in the vector should match the positions in the \code{X_dist} argument whose entries are "Bernoulli". All other entries will be ignored. Can be \code{NULL} if there are no "Bernoulli" entries in \code{X_dist}.
+#' @param prob_U numeric vector length q; success probabilities for unmeasured Bernoulli covariates. Must lie in (0,1).
+#' Positions in the vector should match the positions in the \code{U_dist} argument whose entries are "Bernoulli". All other entries will be ignored. Can be \code{NULL} if there are no "Bernoulli" entries in \code{U_dist}.
 #' @param treat_assign character; one of "randomized" or "confounded".
 #' @param alpha_0 numeric; intercept in treatment model if confounded.
 #' @param alpha_X numeric vector length p; coefficients for X in treatment model.
@@ -121,7 +234,7 @@
 #' @param beta_U_D numeric vector length q; unmeasured covariate effects on time-to-fatal outcome.
 #' @param lambda_H numeric; baseline hazard rate for time-to-non-fatal outcome.
 #' @param kappa_H numeric; Weibull shape for time-to-non-fatal outcome. Becomes Exponentially distributed when equal to 1.
-#' @param beta_A_H numeric; Treatment log-HR effect on time-to-non-fatal outcome.
+#' @param beta_A_H numeric; Treatment effect on time-to-non-fatal outcome.
 #' @param beta_X_H numeric vector length p; Measured covariate effects on time-to-non-fatal outcome.
 #' @param beta_U_H numeric vector length q; Unmeasured covariate effects on time-to-non-fatal outcome.
 #' @param theta_copula numeric \eqn{>=} 1; Gumbel–Hougaard dependence parameter. No association between latent competing event times when equal to 1.
@@ -169,15 +282,19 @@
 simulate_dataset <- function(
     N,
     p, q,
-    mu_X, sd_X,
-    mu_U, sd_U,
+    X_dist = NULL,
+    U_dist = NULL,
+    mu_X = NULL, sd_X = NULL,
+    mu_U = NULL, sd_U = NULL,
+    prob_X = NULL,
+    prob_U = NULL,
     treat_assign = c("randomized", "confounded"),
     alpha_0 = 0,
     alpha_X = NULL,
     alpha_U = NULL,
     lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
     lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-    theta_copula,
+    theta_copula = 1L,
     lambda_C, beta_A_C,
     phi_admin,
     incl_tfe = FALSE,
@@ -192,24 +309,26 @@ simulate_dataset <- function(
   #---------------------------
 
   # Generate measured covariate matrix X (N x p)
-  if (p > 0L) {
-    X_mat <- sapply(1:p, function(j) {
-      rnorm(N, mean = mu_X[j], sd = sd_X[j])
-    })
-    colnames(X_mat) <- paste0("X_", 1:p)
-  } else {
-    X_mat <- NULL
-  }
+  X_mat <- .generate_covariate_matrix(
+    N     = N,
+    p     = p,
+    mu    = mu_X,
+    sd    = sd_X,
+    dist  = X_dist,
+    prob  = prob_X,
+    prefix = "X"
+  )
 
   # Generate unmeasured covariate matrix U (N x q)
-  if (q > 0L) {
-    U_mat <- sapply(1:q, function(j) {
-      rnorm(N, mean = mu_U[j], sd = sd_U[j])
-    })
-    colnames(U_mat) <- paste0("U_", 1:q)
-  } else {
-    U_mat <- NULL
-  }
+  U_mat <- .generate_covariate_matrix(
+    N     = N,
+    p     = q,
+    mu    = mu_U,
+    sd    = sd_U,
+    dist  = U_dist,
+    prob  = prob_U,
+    prefix = "U"
+  )
 
   #---------------------------
   # 2. TREATMENT ASSIGNMENT
