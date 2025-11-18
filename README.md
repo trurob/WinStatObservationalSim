@@ -3,11 +3,13 @@
 This study builds on theoretical results, and simulation studies, found in the following two papers:
 - Causal Inference on Win Ratio for Observational Data With Dependent Subjects (Zhang et al., 2022)
 - Inference on win ratio for cluster-randomized semi-competing risk data (Zhang 2021)
+  
 Which, in turn, build on simulation studies and theoretical results found in:
 - Sample size formula for general win ratio analysis (Mao 2020)
 - On the Alternative Hypotheses for the Win Ratio (Mao 2019)
 - On causal estimation using U-statistics (Mao 2018)
 - An Alternative Approach to Confidence Interval Estimation for the  Win Ratio Statistic (Luo et al., 2015)
+  
 We build on previous simulation studies by:
 - Modeling marginal time-to-events using the Weibull distribution, which will allow us to study more complex event distributions and non-proportional hazards.
 - Studying the effect of unmeasured confounding on bias.
