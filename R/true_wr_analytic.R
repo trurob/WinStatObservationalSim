@@ -920,9 +920,18 @@ true_wr_analytic <- function(
 
   # For each individual
   for (i in seq_len(N)) {
+
     # Grab their covariates
-    x_i <- ifelse(!is.null(X_mat), X_mat[i, ], NULL)
-    u_i <- ifelse(!is.null(U_mat), U_mat[i, ], NULL)
+    if (!is.null(X_mat)) {
+      x_i <- X_mat[i, ]
+    } else {
+      x_i <- NULL
+    }
+    if (!is.null(U_mat)) {
+      u_i <- U_mat[i, ]
+    } else {
+      u_i <- NULL
+    }
 
     # Calculate the true causal WR integral given this individual's covariates
     out_i <- .true_wr_single_covariate(
