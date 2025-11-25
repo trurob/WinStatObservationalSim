@@ -1,0 +1,22 @@
+Package: WinStatObservationalSim
+Title: Win Statistics in Observational Studies
+Version: 0.0.1
+Authors@R: 
+    person("Robert", "Trujillo", , "trurob888@gmail.com", role = c("aut", "cre"))
+Description: Simulates an observational dataset with two treatment arms,
+    (un)measured covariates, and semi-competing (possibly correlated)
+    time-to-event outcomes, for use with statistical methods for composite outcomes.
+License: GPL (>= 3)
+URL: https://github.com/trurob/WinStatObservationalSim
+BugReports: 
+    https://github.com/trurob/WinStatObservationalSim/issues
+Encoding: UTF-8
+Language: en-US
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Imports: 
+    stats,
+    utils
