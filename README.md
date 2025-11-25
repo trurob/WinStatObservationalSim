@@ -61,10 +61,6 @@ where $A$, $B$, $C$, $D$ are components derived from the joint distribution of $
 
 Computes the true causal win ratio via Monte Carlo approximation by generating a large superpopulation and calculating the empirical population-level win ratio. As the superpopulation size increases, this converges to the analytical truth.
 
-### `get_true_WR()`
-
-Given pre-split treatment and control dataframes, performs all-against-all pairwise comparisons to compute the population win ratio. Uses an efficient counting approach to avoid explicit enumeration of all pairs.
-
 ## Mathematical Details
 
 ### Data Model
