@@ -1,6 +1,6 @@
 # WinStatObservationalSim
 
-**Win Statistics in Observational Studies**
+**Win** **Stat**istics in **Observational** Studies: **Sim**ulation Package
 
 ## Overview
 
@@ -17,7 +17,7 @@ The simulation framework builds on theoretical results from Zhang et al. (2021, 
 
 ## Installation
 
-You can install the development version of `WinStatObservationalSim` from GitHub:
+The current version of `WinStatObservationalSim` can be installed from GitHub:
 
 ```r
 # Install from GitHub using remotes
