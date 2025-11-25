@@ -1,6 +1,6 @@
 # WinStatObservationalSim
 
-**Win** **Stat**istics in **Observational** Studies: **Sim**ulation Package
+**Win Statistics in Observational Studies: A Simulation Package**
 
 ## Overview
 
@@ -74,13 +74,13 @@ For $N$ independent subjects, we simulate a hierarchical composite outcome with 
 We assume that covariates can follow either a Normal or a Bernoulli distribution. Measured covariates are parameterized by:
 
 $$
-\quad X_{j} \sim \text{Normal}(\mu_{X}, \sigma_{X}^2)\quad\text{or}\quad X_{j}\sim\text{Bernoulli}(\rho_{X})\quad \text{for}\quad j \in \{ 1,\dots,p \}
+\quad X_{j} \sim \text{Normal}(\mu_{X}, \sigma_{X}^2)\quad\text{or}\quad X_{j}\sim\text{Bernoulli}(\rho_{X})\quad \text{for}\quad j \in \\{ 1,\dots,p \\}
 $$
 
 while unmeasured covariates are parameterized by:
 
 $$
-\quad U_{k} \sim \text{Normal}(\mu_{U}, \sigma_{U}^2)\quad\text{or}\quad U_{k}\sim\text{Bernoulli}(\rho_{U})\quad \text{for}\quad k \in \{ 1,\dots,q \}
+\quad U_{k} \sim \text{Normal}(\mu_{U}, \sigma_{U}^2)\quad\text{or}\quad U_{k}\sim\text{Bernoulli}(\rho_{U})\quad \text{for}\quad k \in \\{ 1,\dots,q \\}
 $$
 
 *Note: For simplicity of notation, the data generating mechanism below uses $p=1$ and $q=1$. Naturally, for multiple covariates, any relevant multiplication below can be replaced by matrix multiplication.*
@@ -88,33 +88,33 @@ $$
 For treatment assignment, we explore two settings: "randomized" treatment with $A \sim \text{Bernoulli}(0.5)$, and a "confounded" treatment assignment with the logistic model:
 
 $$
-\mathbb{P}_{}\left( A=1|X,U \right) = \frac{1}{1+\exp \left\{ -(\alpha_{0} + \alpha_{X}X + \alpha_{U}U) \right\} }
+\mathbb{P}( A=1|X,U ) = \frac{1}{1+\exp \\{ -(\alpha_{0} + \alpha_{X}X + \alpha_{U}U) \\} }
 $$
 
 We then assume Weibull marginal distributions for the latent time-to-event components (Cox & Oakes 1984):
 
 $$
-T_{D}\sim\text{Weibull}\left( \Lambda_{D}, \kappa_{D}\right), \quad T_{H}\sim\text{Weibull}\left( \Lambda_{H}, \kappa_{H}\right)
+T_{D}\sim\text{Weibull}( \Lambda_{D}, \kappa_{D}), \quad T_{H}\sim\text{Weibull}( \Lambda_{H}, \kappa_{H})
 $$
 
 shape parameters $\kappa_{D},\kappa_{H}\in(0,\infty)$ and the following proportional hazards model for the Weibull's scale parameters:
 
 $$
-\Lambda_{D}=\lambda_{D}\exp \left\{-\left( \beta_{A,D} A+ \beta_{X,D} X + \beta_{U,D} U \right)  \right\}   ,
-\quad \Lambda_{H}=\lambda_{H}\exp \left\{-\left( \beta_{A,H} A+ \beta_{X,H} X + \beta_{U,H} U \right)  \right\}
+\Lambda_{D}=\lambda_{D}\exp \\{-( \beta_{A,D} A+ \beta_{X,D} X + \beta_{U,D} U )  \\}   ,
+\quad \Lambda_{H}=\lambda_{H}\exp \\{-( \beta_{A,H} A+ \beta_{X,H} X + \beta_{U,H} U )  \\}
 $$
 
 where $\lambda_{D},\lambda_{H}$ are baseline hazard rates. We follow Zhang (2021, 2022) and parameterize the hazard models so that positive coefficients correspond to reduction in event hazards. The marginal survival functions are then given by:
 
 $$
-S_{D}(t_{D}|A,X,U)=\exp \left\{-(\Lambda_{D}t_{D})^{\kappa_{D}}  \right\}, 
-\quad S_{H}(t_{H}|A,X,U)=\exp \left\{-(\Lambda_{H}t_{H})^{\kappa_{H}}  \right\} 
+S_{D}(t_{D}|A,X,U)=\exp \\{-(\Lambda_{D}t_{D})^{\kappa_{D}}  \\}, 
+\quad S_{H}(t_{H}|A,X,U)=\exp \\{-(\Lambda_{H}t_{H})^{\kappa_{H}}  \\}
 $$
 
 We model the joint survival function for $(T_{D},T_{H})$ with the Gumbel-Hougaard copula as used in previous win ratio literature (Luo et al., 2015; Oakes, 2016):
 
 $$
-S_{D,H}(t_{D},t_{H}|A,X,U)=\exp \left\{ -\left[ (\Lambda_{D}t_{D})^{\kappa_{D}\theta} + (\Lambda_{H}t_{H})^{\kappa_{H}\theta} \right]^{1/\theta}  \right\} 
+S_{D,H}(t_{D},t_{H}|A,X,U)=\exp \\{ -[ (\Lambda_{D}t_{D})^{\kappa_{D}\theta} + (\Lambda_{H}t_{H})^{\kappa_{H}\theta} ]^{1/\theta}  \\}
 $$
 
 where $\theta\geq1$ controls the association between $T_{D}$ and $T_{H}$ and $\theta=1$ denotes no association. Kendall's tau would then be $\tau=1-\theta ^{-1}$ (Oakes, 1989).
@@ -122,7 +122,7 @@ where $\theta\geq1$ controls the association between $T_{D}$ and $T_{H}$ and $\t
 In our simulation, we don't generate the latent event times $T_{D}$ and $T_{H}$ directly. Instead, we draw the bivariate vector $(V_{D},V_{H})$ from the Gumbel-Hougaard copula (where $V_{D},V_{H}$ are marginally standard uniform random variables), and use the following transformation to derive correlated event times:
 
 $$
-T_{D}=  \frac{\left( -\log(V_{D})\right)^{1/\kappa_{D}}}{\Lambda_{D}}  ,\quad T_{H}=\frac{\left( -\log(V_{H})\right)^{1/\kappa_{H}}}{\Lambda_{H}}
+T_{D}=  \frac{( -\log(V_{D}))^{1/\kappa_{D}}}{\Lambda_{D}}  ,\quad T_{H}=\frac{( -\log(V_{H}))^{1/\kappa_{H}}}{\Lambda_{H}}
 $$
 
 Lastly, we introduce a time-to-random-censoring variable $C$ and assume it is independent of $(T_{D},T_{H},X,U)$ conditional on $A$, such that:
@@ -134,7 +134,7 @@ $$
 with rate parameter given by the proportional hazards model:
 
 $$
-\Lambda_{C}=\lambda_{C}\exp \left\{ -\beta_{A,C}A \right\} 
+\Lambda_{C}=\lambda_{C}\exp \\{ -\beta_{A,C}A \\}
 $$
 
 and the "censoring" survival function
@@ -146,13 +146,13 @@ $$
 Now, let $\varphi$ denote the time until administrative censoring, which we will assume is a fixed known value shared by all participants. The observed time-to-fatal-event, and respective event indicator, are then given by:
 
 $$
-Y_{D}=\text{min}(T_{D},C,\varphi),\quad \delta_{D}=\mathbb{1}\{T_{D}\leq\text{min}(C,\varphi)\}
+Y_{D}=\text{min}(T_{D},C,\varphi),\quad \delta_{D}=\mathbb{1}\\{T_{D}\leq\text{min}(C,\varphi)\\}
 $$
 
 and the observed time-to-non-fatal-event, and respective event indicator, are given by:
 
 $$
-Y_{H}=\text{min}(T_{H},T_{D},C,\varphi),\quad \delta_{H}=\mathbb{1}\{T_{H}\leq \text{min}(T_{D},C,\varphi)\}
+Y_{H}=\text{min}(T_{H},T_{D},C,\varphi),\quad \delta_{H}=\mathbb{1}\\{T_{H}\leq \text{min}(T_{D},C,\varphi)\\}
 $$
 
 which characterizes the semi-competing risk paradigm. 
@@ -160,76 +160,52 @@ which characterizes the semi-competing risk paradigm.
 Thus, our observed dataset is:
 
 $$
-\mathcal{O}=\left\{ (A_{i},X_{i},Y_{D,i},\delta_{D,i},Y_{H,i},\delta_{H,i}):i=1\dots,N \right\} 
+\mathcal{O}=\\{ (A_{i},X_{i},Y_{D,i},\delta_{D,i},Y_{H,i},\delta_{H,i}):i=1\dots,N \\}
 $$
 
 ### True Causal Win Ratio
 
 Let $X \in \mathbb{R}^p$ and $U \in \mathbb{R}^q$ denote measured and unmeasured covariates with joint density $f_{X,U}(x,u)$.  
-For treatment $a \in \{0,1\}$, define the latent event times $(T_{D,a}, T_{H,a})$ with respective survival functions:
+For treatment $a \in \\{0,1\\}$, define the latent event times $(T_{D,a}, T_{H,a})$ with respective survival functions:
 
 $$
-S_{D,a}(t \mid x,u)
-  = \exp\!\left\{ -(\Lambda_{D,a}(x,u)\, t)^{\kappa_D} \right\}, \quad S_{H,a}(t \mid x,u)
-  = \exp\!\left\{ -(\Lambda_{H,a}(x,u)\, t)^{\kappa_H} \right\},
+S_{D,a}(t \mid x,u) = \exp\\{ -(\Lambda_{D,a}(x,u) t)^{\kappa_D} \\}, \quad S_{H,a}(t \mid x,u) = \exp\\{ -(\Lambda_{H,a}(x,u) t)^{\kappa_H} \\},
 $$
 
 with respective proportional hazards models:
 
 $$
-\Lambda_{D,a}(x,u)
-  = \lambda_D \exp\!\left[-(\beta_{A,D}\, a 
-          + \beta_{X,D}^\top x + \beta_{U,D}^\top u)\right], \quad \Lambda_{H,a}(x,u)
-  = \lambda_H \exp\!\left[-(\beta_{A,H}\, a 
-          + \beta_{X,H}^\top x + \beta_{U,H}^\top u)\right].
+\Lambda_{D,a}(x,u) = \lambda_D \exp[-(\beta_{A,D} a + \beta_{X,D}^\top x + \beta_{U,D}^\top u)], \quad \Lambda_{H,a}(x,u) = \lambda_H \exp[-(\beta_{A,H} a + \beta_{X,H}^\top x + \beta_{U,H}^\top u)].
 $$
 
 The joint survival function for $(T_{D,a}, T_{H,a})$ under treatment $a$ is given by the Gumbel–Hougaard copula:
 
 $$
-S_{D,H,a}(y_2, y_1 \mid x,u)
-  = \exp\!\left\{
-     -\left[
-       (\Lambda_{D,a}(x,u)\, y_2)^{\kappa_D \theta}
-       + (\Lambda_{H,a}(x,u)\, y_1)^{\kappa_H \theta}
-     \right]^{1/\theta}
-   \right\}
+S_{D,H,a}(y_2, y_1 \mid x,u) = \exp\\{ -[ (\Lambda_{D,a}(x,u) y_2)^{\kappa_D \theta} + (\Lambda_{H,a}(x,u) y_1)^{\kappa_H \theta} ]^{1/\theta} \\}
 $$
 
 Define the conditional survival of $T_H$ beyond $y_1$ given survival of $T_D$ beyond $y_2$ as
 
 $$
-G_a(y_1,y_2 \mid x,u)
-  = \frac{S_{D,H,a}(y_2, y_1 \mid x,u)}{S_{D,a}(y_2 \mid x,u)}.
+G_a(y_1,y_2 \mid x,u) = \frac{S_{D,H,a}(y_2, y_1 \mid x,u)}{S_{D,a}(y_2 \mid x,u)}.
 $$
 
 Define the density of $T_D$ at $y_2$ under treatment $a$:
 
 $$
-\lambda_{D,a}(y_2 \mid x,u)
- = \frac{\partial}{\partial y_2}
-   \left[ 1 - S_{D,a}(y_2 \mid x,u) \right].
+\lambda_{D,a}(y_2 \mid x,u) = \frac{\partial}{\partial y_2} [ 1 - S_{D,a}(y_2 \mid x,u) ].
 $$
 
 Define the hazard for $T_H$ at $y_1$ conditional on $T_D = y_2$ under treatment $a$:
 
 $$
-\lambda_{H \mid D, a}(y_1 \mid y_2, x,u)
-  = \frac{
-      \frac{\partial}{\partial y_1} 
-      G_a(y_1,y_2 \mid x,u)
-    }{
-      G_a(y_1,y_2 \mid x,u)
-    }.
+\lambda_{H \mid D, a}(y_1 \mid y_2, x,u) = \frac{\frac{\partial}{\partial y_1} G_a(y_1,y_2 \mid x,u)}{G_a(y_1,y_2 \mid x,u)}.
 $$
 
 Define the censoring survival and hazards under treatment $a$:
 
 $$
-Q_a(t)
-  = \exp\!\left( -\Lambda_{C,a} t \right),
-\qquad
-\Lambda_{C,a} = \lambda_C \exp(-\beta_{A,C} a),
+Q_a(t) = \exp( -\Lambda_{C,a} t ), \qquad \Lambda_{C,a} = \lambda_C \exp(-\beta_{A,C} a),
 $$
 
 $$
@@ -240,62 +216,17 @@ Using the notation and derivation established in Zhang 2021, we define the four 
 
 $$
 \begin{align}
-A(x,u)
-  & = \int_0^{\infty}
-     S_{D,1}(y_2\mid x,u)\,
-     Q_1(y_2)\,
-     S_{D,0}(y_2\mid x,u)\,
-     Q_0(y_2)\,
-     \lambda_{D,0}(y_2\mid x,u)\,
-   dy_2 \\
- \\
-B(x,u)
-  & = \int_0^{\infty} \int_0^{y_2}
-     G_1(y_1,y_2\mid x,u)\,
-     Q_1(y_2)\,
-     G_0(y_1,y_2\mid x,u)\,
-     Q_0(y_2)\,
-     \lambda_{H\mid D,0}(y_1\mid y_2,x,u)\,
-     \{\lambda_{C,0}(y_2)+\lambda_{C,1}(y_2)\}
-   \, dy_1\, dy_2 \\
- \\
-C(x,u)
-  & = \int_0^{\infty}
-     S_{D,1}(y_2\mid x,u)\,
-     Q_1(y_2)\,
-     S_{D,0}(y_2\mid x,u)\,
-     Q_0(y_2)\,
-     \lambda_{D,1}(y_2\mid x,u)\,
-   dy_2 \\
- \\
-D(x,u)
-  & = \int_0^{\infty} \int_0^{y_2}
-     G_1(y_1,y_2\mid x,u)\,
-     Q_1(y_2)\,
-     G_0(y_1,y_2\mid x,u)\,
-     Q_0(y_2)\,
-     \lambda_{H\mid D,1}(y_1\mid y_2,x,u)\,
-     \{\lambda_{C,0}(y_2)+\lambda_{C,1}(y_2)\}
-   \, dy_1\, dy_2.
+A(x,u) & = \int_0^{\infty} S_{D,1}(y_2\mid x,u) Q_1(y_2) S_{D,0}(y_2\mid x,u) Q_0(y_2) \lambda_{D,0}(y_2\mid x,u) dy_2 \\\\
+B(x,u) & = \int_0^{\infty} \int_0^{y_2} G_1(y_1,y_2\mid x,u) Q_1(y_2) G_0(y_1,y_2\mid x,u) Q_0(y_2) \lambda_{H\mid D,0}(y_1\mid y_2,x,u) \\{\lambda_{C,0}(y_2)+\lambda_{C,1}(y_2)\\} dy_1 dy_2 \\\\
+C(x,u) & = \int_0^{\infty} S_{D,1}(y_2\mid x,u) Q_1(y_2) S_{D,0}(y_2\mid x,u) Q_0(y_2) \lambda_{D,1}(y_2\mid x,u) dy_2 \\\\
+D(x,u) & = \int_0^{\infty} \int_0^{y_2} G_1(y_1,y_2\mid x,u) Q_1(y_2) G_0(y_1,y_2\mid x,u) Q_0(y_2) \lambda_{H\mid D,1}(y_1\mid y_2,x,u) \\{\lambda_{C,0}(y_2)+\lambda_{C,1}(y_2)\\} dy_1 dy_2.
 \end{align}
 $$
 
 Then the true causal win ratio is defined as:
 
 $$
-\mathrm{WR}_{\text{causal}}
-  = \frac{
-      \mathbb{E}_{X,U}[A(X,U)+B(X,U)]
-    }{
-      \mathbb{E}_{X,U}[C(X,U)+D(X,U)]
-    }
-      = \frac{
-      \displaystyle
-      \int (A(x,u)+B(x,u))\, f_{X,U}(x,u)\, dx\,du
-    }{
-      \displaystyle
-      \int (C(x,u)+D(x,u))\, f_{X,U}(x,u)\, dx\,du
-    }
+\mathrm{WR}_{\text{causal}} = \frac{\mathbb{E}_{X,U}[A(X,U)+B(X,U)]}{\mathbb{E}_{X,U}[C(X,U)+D(X,U)]} = \frac{\int (A(x,u)+B(x,u)) f_{X,U}(x,u) dx du}{\int (C(x,u)+D(x,u)) f_{X,U}(x,u) dx du}
 $$
 
 As mentioned by Zhang, when there are a small number of covariates this expression can feasibly be calculated analytically using numerical integration. When the number of covariates is large, the integrals become intractable, and a Monte Carlo approach becomes more feasible.
