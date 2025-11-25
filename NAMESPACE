@@ -2,3 +2,5 @@
 
 export(get_true_WR)
 export(simulate_dataset)
+export(true_wr_analytic)
+export(true_wr_monte_carlo)
