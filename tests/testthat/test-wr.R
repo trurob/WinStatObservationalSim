@@ -16,7 +16,7 @@ test_that("Number of wins, losses, and ties from get_true_WR sum to total pairs"
   )
   treatment <- subset(dat, A == 1, select = c(Y_D, delta_D, Y_H, delta_H))
   control <- subset(dat, A == 0, select = c(Y_D, delta_D, Y_H, delta_H))
-  result <- get_true_WR(treatment, control)
+  result <- .get_WR(treatment, control)
   expect_equal(result$treated_wins + result$control_wins + result$ties, result$total_pairs)
   expect_gte(result$pi_T, 0)
   expect_gte(result$pi_C, 0)

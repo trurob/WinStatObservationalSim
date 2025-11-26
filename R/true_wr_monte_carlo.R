@@ -81,7 +81,8 @@
 #'
 #' @description
 #' Within the subset of controls without observed death, split by hospitalization
-#' status and return sorted hospitalization times for those hospitalized.
+#' status and return sorted hospitalization times for those hospitalized,
+#' and sorted follow-up times for those not hospitalized (used to resolve ties vs losses).
 #'
 #' @param Y_H_c0 Numeric vector of observed hospitalization times among controls with no death.
 #' @param delta_H_c0 Integer (0/1) vector of hospitalization indicators among controls with no death.
@@ -89,21 +90,23 @@
 #' @return A list with:
 #'   \itemize{
 #'     \item \code{h_ctrl_sorted}: sorted hospitalization times among controls w/ hospitalization.
+#'     \item \code{nh_ctrl_sorted}: sorted follow-up times among controls w/o hospitalization.
 #'     \item \code{m0h1}: count of controls (no-death) with hospitalization.
 #'     \item \code{m0h0}: count of controls (no-death) without hospitalization.
 #'   }
 #'
 #' @keywords internal
 .prep_control_hosp_nodeath <- function(Y_H_c0, delta_H_c0) {
-  c0h1_idx <- which(delta_H_c0 == 1L)
-  c0h0_idx <- which(delta_H_c0 == 0L)
-
+  c0h1_idx <- which(delta_H_c0 == 1L)  # hospitalized
+  c0h0_idx <- which(delta_H_c0 == 0L)  # not hospitalized (followed/censored)
   list(
-    h_ctrl_sorted = sort(Y_H_c0[c0h1_idx]),
+    h_ctrl_sorted  = sort(Y_H_c0[c0h1_idx]),
+    nh_ctrl_sorted = sort(Y_H_c0[c0h0_idx]),
     m0h1 = length(c0h1_idx),
     m0h0 = length(c0h0_idx)
   )
 }
+
 
 #' Count wins/losses/ties at the death stage
 #'
@@ -169,17 +172,24 @@
 #' @description
 #' Restrict to pairs where neither side has an observed death, and implement
 #' the hospitalization comparison by counting. Equal times are counted as ties.
+#' A key detail: when one subject has no hospitalization (delta_H=0), the pair is a win/loss
+#' only if that subject's follow-up extends beyond the other's hospitalization time;
+#' otherwise it's a tie.
 #'
 #' @param Y_H_t0 Numeric vector of treated hospitalization times among no-death treated.
 #' @param delta_H_t0 Integer (0/1) vector of treated hospitalization indicators among no-death treated.
 #' @param h_ctrl_sorted Sorted hospitalization times among controls with no death and with hospitalization.
+#' @param nh_ctrl_sorted Sorted follow-up times among controls with no death and no hospitalization.
 #' @param m0h1 Number of controls (no-death) with hospitalization.
 #' @param m0h0 Number of controls (no-death) without hospitalization.
 #'
 #' @return A list with \code{wins}, \code{losses}, \code{ties} resolved at the hospitalization stage.
 #'
 #' @keywords internal
-.count_stage_hosp <- function(Y_H_t0, delta_H_t0, h_ctrl_sorted, m0h1, m0h0) {
+.count_stage_hosp <- function(Y_H_t0, delta_H_t0,
+                              h_ctrl_sorted, nh_ctrl_sorted,
+                              m0h1, m0h0) {
+
   t0h1_idx <- which(delta_H_t0 == 1L)  # treated hospitalized (within no-death)
   t0h0_idx <- which(delta_H_t0 == 0L)  # treated not hospitalized (within no-death)
 
@@ -187,39 +197,56 @@
   losses <- 0.0
   ties <- 0.0
 
-  # Treated NOT hospitalized: win vs all controls who are hospitalized; tie vs controls not hospitalized.
-  n0h0 <- length(t0h0_idx)
-  if (n0h0 > 0L) {
+  ## Treated NOT hospitalized (delta_H = 0):
+  ## - Win vs control hospitalized ONLY if control's hosp time < treated's follow-up time.
+  ## - Tie vs control hospitalized if control's hosp time >= treated's follow-up time.
+  ## - Tie vs control not hospitalized (both no hospitalization).
+  if (length(t0h0_idx) > 0L) {
+    q_noh <- Y_H_t0[t0h0_idx]  # treated follow-up times (no hospitalization)
     if (m0h1 > 0L) {
-      wins <- wins + as.double(n0h0) * as.double(m0h1)
+      # how many control hosp times are strictly less than q_noh
+      lt_h <- findInterval(q_noh, h_ctrl_sorted, left.open = TRUE)
+      # equal (ties on equal times; rare with continuous times)
+      le_h <- findInterval(q_noh, h_ctrl_sorted, left.open = FALSE)
+      eq_h <- le_h - lt_h
+      gt_h <- m0h1 - le_h
+      wins <- wins + sum(as.double(lt_h))
+      # ties accrue from equal times and from controls hospitalized later than treated follow-up
+      ties <- ties + sum(as.double(eq_h + gt_h))
     }
     if (m0h0 > 0L) {
-      ties <- ties + as.double(n0h0) * as.double(m0h0)
+      # all pairs with control also not hospitalized are ties
+      ties <- ties + as.double(length(t0h0_idx)) * as.double(m0h0)
     }
   }
 
-  # Treated hospitalized: compare ordering vs control hospitalized, and lose vs controls not hospitalized.
-  n0h1 <- length(t0h1_idx)
-  if (n0h1 > 0L) {
-    q <- Y_H_t0[t0h1_idx]
-    pos <- .count_positions(h_ctrl_sorted, q)
-
-    # Wins: controls hospitalized strictly earlier than treated (lt)
-    wins <- wins + sum(as.double(pos$lt))
-
-    # Losses: Controls hospitalized strictly later (gt) and controls never hospitalized
-    losses <- losses + sum(as.double(pos$gt)) + as.double(n0h1) * as.double(m0h0)
-
-    # Ties at hospitalization (equal times)
-    ties <- ties + sum(as.double(pos$eq))
+  ## Treated hospitalized (delta_H = 1):
+  ## - Vs control hospitalized: standard ordering (lt = win, gt = loss, eq = tie).
+  ## - Vs control not hospitalized: loss ONLY if control's no-hospitalization follow-up
+  ##   extends beyond treated's hospitalization time (i.e., nh_time > treated_h_time),
+  ##   otherwise tie (control censored earlier).
+  if (length(t0h1_idx) > 0L) {
+    q_h <- Y_H_t0[t0h1_idx]  # treated hospitalization times
+    if (m0h1 > 0L) {
+      pos_h <- .count_positions(h_ctrl_sorted, q_h)
+      wins   <- wins   + sum(as.double(pos_h$lt))
+      losses <- losses + sum(as.double(pos_h$gt))
+      ties   <- ties   + sum(as.double(pos_h$eq))
+    }
+    if (m0h0 > 0L) {
+      # controls not hospitalized: compare treated hosp time to their follow-up times
+      # losses: nh_time > treated_time
+      le_nh <- findInterval(q_h, nh_ctrl_sorted, left.open = FALSE)  # count <= treated_time
+      gt_nh <- m0h0 - le_nh                                          # count  > treated_time
+      losses <- losses + sum(as.double(gt_nh))
+      # ties: nh_time <= treated_time
+      ties   <- ties   + sum(as.double(le_nh))
+    }
   }
 
-  list(
-    wins = wins,
-    losses = losses,
-    ties = ties
-  )
+  list(wins = wins, losses = losses, ties = ties)
 }
+
 
 ############################################
 # ------------ MAIN FUNCTIONS ------------ #
@@ -248,7 +275,7 @@
 #'   }
 #'
 #' @export
-get_true_WR <- function(treated, control) {
+.get_WR <- function(treated, control) {
 
   # Grab relevant data, save into vectors, and grab sizes
   Y_D_t <- as.numeric(treated$Y_D)
@@ -294,6 +321,7 @@ get_true_WR <- function(treated, control) {
     Y_H_t0 = Y_H_t0,
     delta_H_t0 = delta_H_t0,
     h_ctrl_sorted = ctrl_hosp$h_ctrl_sorted,
+    nh_ctrl_sorted= ctrl_hosp$nh_ctrl_sorted,
     m0h1 = ctrl_hosp$m0h1,
     m0h0 = ctrl_hosp$m0h0
   )
@@ -362,7 +390,7 @@ true_wr_monte_carlo <- function(N_super = 1e6,
   control <- superpop[superpop$A == 0, c("Y_D","delta_D","Y_H","delta_H"), drop = FALSE]
 
   # Compute and return population WR
-  result <- get_true_WR(treated, control)
+  result <- .get_WR(treated, control)
   result$N_super <- N_super
   return(result)
 }
