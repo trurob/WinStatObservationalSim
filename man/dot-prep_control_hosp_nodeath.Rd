@@ -15,12 +15,14 @@
 A list with:
 \itemize{
 \item \code{h_ctrl_sorted}: sorted hospitalization times among controls w/ hospitalization.
+\item \code{nh_ctrl_sorted}: sorted follow-up times among controls w/o hospitalization.
 \item \code{m0h1}: count of controls (no-death) with hospitalization.
 \item \code{m0h0}: count of controls (no-death) without hospitalization.
 }
 }
 \description{
 Within the subset of controls without observed death, split by hospitalization
-status and return sorted hospitalization times for those hospitalized.
+status and return sorted hospitalization times for those hospitalized,
+and sorted follow-up times for those not hospitalized (used to resolve ties vs losses).
 }
 \keyword{internal}

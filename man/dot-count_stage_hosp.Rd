@@ -4,7 +4,14 @@
 \alias{.count_stage_hosp}
 \title{Count wins/losses/ties at the hospitalization stage within no-death pairs}
 \usage{
-.count_stage_hosp(Y_H_t0, delta_H_t0, h_ctrl_sorted, m0h1, m0h0)
+.count_stage_hosp(
+  Y_H_t0,
+  delta_H_t0,
+  h_ctrl_sorted,
+  nh_ctrl_sorted,
+  m0h1,
+  m0h0
+)
 }
 \arguments{
 \item{Y_H_t0}{Numeric vector of treated hospitalization times among no-death treated.}
@@ -12,6 +19,8 @@
 \item{delta_H_t0}{Integer (0/1) vector of treated hospitalization indicators among no-death treated.}
 
 \item{h_ctrl_sorted}{Sorted hospitalization times among controls with no death and with hospitalization.}
+
+\item{nh_ctrl_sorted}{Sorted follow-up times among controls with no death and no hospitalization.}
 
 \item{m0h1}{Number of controls (no-death) with hospitalization.}
 
@@ -23,5 +32,8 @@ A list with \code{wins}, \code{losses}, \code{ties} resolved at the hospitalizat
 \description{
 Restrict to pairs where neither side has an observed death, and implement
 the hospitalization comparison by counting. Equal times are counted as ties.
+A key detail: when one subject has no hospitalization (delta_H=0), the pair is a win/loss
+only if that subject's follow-up extends beyond the other's hospitalization time;
+otherwise it's a tie.
 }
 \keyword{internal}

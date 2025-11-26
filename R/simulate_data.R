@@ -199,6 +199,8 @@
 # ------------ MAIN FUNCTIONS ------------ #
 ############################################
 
+#' Generate a single dataset under the specified semi-competing risk paradigm.
+#'
 #' @description
 #' Generate a single dataset of i.i.d. subjects under semi-competing risks, with:
 #' \itemize{
