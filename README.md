@@ -35,7 +35,7 @@ devtools::install_github("trurob/WinStatObservationalSim")
 
 ## Main Functions
 
-The package exports four primary functions:
+The package exports the following primary functions:
 
 ### `simulate_dataset()`
 
