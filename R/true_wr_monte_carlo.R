@@ -274,7 +274,6 @@
 #'     \item \code{WR} = \code{pi_T} / \code{pi_C}
 #'   }
 #'
-#' @export
 .get_WR <- function(treated, control) {
 
   # Grab relevant data, save into vectors, and grab sizes
