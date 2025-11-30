@@ -361,22 +361,27 @@
 
   h   <- fd_step
   y1p <- y1 + h
-  G1  <- .G_cond(y1,  y2, a, x, u,
-                 lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                 lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-                 theta_copula)
-  G1p <- .G_cond(y1p, y2, a, x, u,
-                 lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                 lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-                 theta_copula)
+  y1m <- if (y1 > h) y1 - h else 0
 
-  # numerical guard for lambda_{H|D} finite difference
+  Gm <- .G_cond(y1m, y2, a, x, u,
+                lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
+                lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
+                theta_copula)
+  G0 <- .G_cond(y1,  y2, a, x, u,
+                lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
+                lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
+                theta_copula)
+  Gp <- .G_cond(y1p, y2, a, x, u,
+                lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
+                lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
+                theta_copula)
+
   eps_G <- 1e-300
-  if (!is.finite(G1) || !is.finite(G1p) || is.na(G1) || is.na(G1p) || G1 <= eps_G || G1p <= eps_G){
+  if (!is.finite(Gm) || !is.finite(G0) || !is.finite(Gp) || is.na(Gm) || is.na(G0) || is.na(Gp) || Gm <= eps_G || G0 <= eps_G || Gp <= eps_G){
     return(0)
   }
 
-  d_logG <- (log(G1p) - log(G1)) / h
+  d_logG <- (log(Gp) - log(Gm)) / (2 * h)
   lambda <- -d_logG
 
   if (!is.finite(lambda) || lambda < 0){
@@ -384,6 +389,7 @@
   }
 
   return(lambda)
+
 }
 
 #' Nested double integral helper
