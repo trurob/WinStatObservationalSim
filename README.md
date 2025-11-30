@@ -79,7 +79,7 @@ $$
 \quad U_{k} \sim \text{Normal}(\mu_{U}, \sigma_{U}^2)\quad\text{or}\quad U_{k}\sim\text{Bernoulli}(\rho_{U})\quad \text{for}\quad k \in \\{ 1,\dots,q \\}
 $$
 
-*Note: For simplicity of notation, the data generating mechanism below uses $p=1$ and $q=1$. Naturally, for multiple covariates, any relevant multiplication below can be replaced by matrix multiplication.*
+*Note: For simplicity of notation, the data generating mechanism below uses* $p=1$ *and* $q=1$*. Naturally, for multiple covariates, any relevant multiplication below can be replaced by matrix multiplication.*
 
 For treatment assignment, we explore two settings: "randomized" treatment with $A \sim \text{Bernoulli}(0.5)$, and a "confounded" treatment assignment with the logistic model:
 
