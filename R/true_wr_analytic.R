@@ -369,10 +369,21 @@
                  lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
                  lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
                  theta_copula)
-  logG  <- log(G1)
-  logGp <- log(G1p)
-  d_logG <- (logGp - logG) / h
-  return(-d_logG)
+
+  # numerical guard for lambda_{H|D} finite difference
+  eps_G <- 1e-300
+  if (!is.finite(G1) || !is.finite(G1p) || is.na(G1) || is.na(G1p) || G1 <= eps_G || G1p <= eps_G){
+    return(0)
+  }
+
+  d_logG <- (log(G1p) - log(G1)) / h
+  lambda <- -d_logG
+
+  if (!is.finite(lambda) || lambda < 0){
+    lambda <- 0
+  }
+
+  return(lambda)
 }
 
 #' Nested double integral helper
