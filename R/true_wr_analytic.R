@@ -1,979 +1,869 @@
-# The functions in this package are modified versions of code used in Di Zhang's
-# `cWR` package, found here: https://github.com/dee1008/cWR
-
+# True Causal Win Ratio - Analytical Calculation
+# Based on Zhang et al. (2019, 2022), Luo et al. (2015)
+#
+# This script implements the analytical calculation of the true causal win ratio
+# for observational studies with semi-competing risks data.
+#
+# This package is a modified versiion of Zhang's cWR package:
+# https://github.com/dee1008/cWR
 
 ##############################################
 # ------------ HELPER FUNCTIONS ------------ #
 ##############################################
-# TODO: Move helper functions to their own file
 
-#' Linear predictor for fatal event
+#' Marginal survival function for fatal event under treatment a
 #'
-#' Compute the linear predictor for the fatal event hazard given treatment, measured covariates x, and unmeasured covariates u.
+#' Computes S_D(t | a, x, u) for Weibull marginals.
 #'
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param beta_A_D numeric scalar; treatment coefficient; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u; can also be \code{NULL}
+#' @param t numeric scalar or vector; time
+#' @param a numeric scalar (0 or 1); treatment indicator
+#' @param x numeric vector; measured covariates (can be NULL)
+#' @param u numeric vector; unmeasured covariates (can be NULL)
+#' @param lambda_D numeric scalar > 0; baseline hazard rate for fatal event
+#' @param kappa_D numeric scalar > 0; Weibull shape parameter for fatal event
+#' @param beta_A_D numeric scalar; treatment effect on fatal event
+#' @param beta_X_D numeric vector; effects of measured covariates on fatal event (can be NULL)
+#' @param beta_U_D numeric vector; effects of unmeasured covariates on fatal event (can be NULL)
 #'
-#' @return numeric scalar; linear predictor for the fatal event
-#'
-#' @details One of x or u (and the corresponding beta parameter) can be \code{NULL}, but NOT both.
-#'
-#' @keywords internal
-.linpred_D <- function(a, x, u, beta_A_D, beta_X_D, beta_U_D) {
-  out <- 0
-  if (!is.null(beta_A_D)){
-    out <- out + beta_A_D * a
-  }
-  if (!is.null(beta_X_D) && !is.null(x) && length(beta_X_D) == length(x)) {
-    out <- out + sum(beta_X_D * x)
-  }
-  if (!is.null(beta_U_D) && !is.null(u) && length(beta_U_D) == length(u)) {
-    out <- out + sum(beta_U_D * u)
-  }
-  return(out)
-}
-
-#' Linear predictor for non-fatal event
-#'
-#' Compute the linear predictor for the non-fatal event hazard given treatment, measured covariates x, and unmeasured covariates u.
-#'
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param beta_A_H numeric scalar; treatment coefficient; can also be \code{NULL}
-#' @param beta_X_H numeric vector; coefficients for x; can also be \code{NULL}
-#' @param beta_U_H numeric vector; coefficients for u; can also be \code{NULL}
-#'
-#' @return numeric scalar; linear predictor for the non-fatal event
-#'
-#' @details One of x or u (and the corresponding beta parameter) can be \code{NULL}, but NOT both.
-#'
-#' @keywords internal
-.linpred_H <- function(a, x, u, beta_A_H, beta_X_H, beta_U_H) {
-  out <- 0
-  if (!is.null(beta_A_H)){
-    out <- out + beta_A_H * a
-  }
-  if (!is.null(beta_X_H) && !is.null(x) && length(beta_X_H) == length(x)) {
-    out <- out + sum(beta_X_H * x)
-  }
-  if (!is.null(beta_U_H) && !is.null(u) && length(beta_U_H) == length(u)) {
-    out <- out + sum(beta_U_H * u)
-  }
-  return(out)
-}
-
-#' Weibull scale parameter for fatal event
-#'
-#' Compute the scale parameter for the Weibull fatal event distribution.
-#'
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard rate
-#' @param beta_A_D numeric scalar; treatment coefficient; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u; can also be \code{NULL}
-#'
-#' @return numeric scalar; Weibull scale parameter for fatal event
-#'
-#' @keywords internal
-.Lambda_D <- function(a, x, u, lambda_D, beta_A_D, beta_X_D, beta_U_D) {
-  lp <- .linpred_D(a, x, u, beta_A_D, beta_X_D, beta_U_D)
-  return(lambda_D * exp(-lp))
-}
-
-#' Weibull scale parameter for non-fatal event
-#'
-#' Compute the scale parameter for the Weibull non-fatal event distribution.
-#'
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard rate
-#' @param beta_A_H numeric scalar; treatment coefficient; can also be \code{NULL}
-#' @param beta_X_H numeric vector; coefficients for x; can also be \code{NULL}
-#' @param beta_U_H numeric vector; coefficients for u; can also be \code{NULL}
-#'
-#' @return numeric scalar; Weibull scale parameter for non-fatal event
-#'
-#' @keywords internal
-.Lambda_H <- function(a, x, u, lambda_H, beta_A_H, beta_X_H, beta_U_H) {
-  lp <- .linpred_H(a, x, u, beta_A_H, beta_X_H, beta_U_H)
-  return(lambda_H * exp(-lp))
-}
-
-#' Censoring hazard for random censoring
-#'
-#' Compute the hazard rate for random censoring. If \code{lambda_C} is NULL,
-#' there is no random censoring and the hazard is zero.
-#'
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param lambda_C numeric scalar > 0; baseline censoring rate; can also be \code{NULL}
-#' @param beta_A_C numeric scalar; treatment coefficient for censoring; can also be \code{NULL}
-#'
-#' @return numeric scalar; censoring hazard
-#'
-#' @keywords internal
-.Lambda_C <- function(a, lambda_C, beta_A_C) {
-  if (is.null(lambda_C)){
-    return(0)
-  }
-  else{
-    return(lambda_C * exp(-beta_A_C * a))
-  }
-}
-
-#' Censoring survival function Q(t | A=a)
-#'
-#' Compute the censoring survival probability Q(t | A=a). If
-#' \code{lambda_C} is NULL, there is no random censoring and Q(t|a) = 1.
-#'
-#' @param t numeric scalar; time
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param lambda_C numeric scalar > 0; baseline censoring rate; can also be \code{NULL}
-#' @param beta_A_C numeric scalar; treatment coefficient for censoring; can also be \code{NULL}
-#'
-#' @return numeric scalar; censoring survival probability
-#'
-#' @keywords internal
-.Q <- function(t, a, lambda_C, beta_A_C) {
-  if (is.null(lambda_C)){
-    return(1)
-  }
-  else{
-    return(exp(-.Lambda_C(a, lambda_C, beta_A_C) * t))
-  }
-
-}
-
-#' Marginal Weibull survival for fatal event
-#'
-#' Compute the marginal survival function S_D(t | A,X,U) for the fatal event.
-#'
-#' @param t numeric scalar; time
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard rate
-#' @param kappa_D numeric scalar > 0; Weibull shape parameter
-#' @param beta_A_D numeric scalar; treatment coefficient; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u; can also be \code{NULL}
-#'
-#' @return numeric scalar; survival probability
+#' @return numeric; survival probability S_D(t | a, x, u)
 #'
 #' @keywords internal
 .S_D <- function(t, a, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D) {
-  lam <- .Lambda_D(a, x, u, lambda_D, beta_A_D, beta_X_D, beta_U_D)
-  return(exp(-(lam * t)^kappa_D))
+  # Calculate linear predictor
+  lp <- beta_A_D * a
+  if (!is.null(x) && !is.null(beta_X_D)) {
+    lp <- lp + sum(beta_X_D * x)
+  }
+  if (!is.null(u) && !is.null(beta_U_D)) {
+    lp <- lp + sum(beta_U_D * u)
+  }
+
+  # Weibull scale parameter
+  Lambda_D <- lambda_D * exp(-lp)
+
+  # Weibull survival function
+  return(exp(-(Lambda_D * t)^kappa_D))
 }
 
-#' Marginal Weibull survival for non-fatal event
+#' Marginal survival function for non-fatal event under treatment a
 #'
-#' Compute the marginal survival function S_H(t | A,X,U) for the non-fatal event.
+#' Computes S_H(t | a, x, u) for Weibull marginals.
 #'
-#' @param t numeric scalar; time
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard rate
-#' @param kappa_H numeric scalar > 0; Weibull shape parameter
-#' @param beta_A_H numeric scalar; treatment coefficient; can also be \code{NULL}
-#' @param beta_X_H numeric vector; coefficients for x; can also be \code{NULL}
-#' @param beta_U_H numeric vector; coefficients for u; can also be \code{NULL}
+#' @param t numeric scalar or vector; time
+#' @param a numeric scalar (0 or 1); treatment indicator
+#' @param x numeric vector; measured covariates (can be NULL)
+#' @param u numeric vector; unmeasured covariates (can be NULL)
+#' @param lambda_H numeric scalar > 0; baseline hazard rate for non-fatal event
+#' @param kappa_H numeric scalar > 0; Weibull shape parameter for non-fatal event
+#' @param beta_A_H numeric scalar; treatment effect on non-fatal event
+#' @param beta_X_H numeric vector; effects of measured covariates on non-fatal event (can be NULL)
+#' @param beta_U_H numeric vector; effects of unmeasured covariates on non-fatal event (can be NULL)
 #'
-#' @return numeric scalar; survival probability
+#' @return numeric; survival probability S_H(t | a, x, u)
 #'
 #' @keywords internal
 .S_H <- function(t, a, x, u, lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H) {
-  lam <- .Lambda_H(a, x, u, lambda_H, beta_A_H, beta_X_H, beta_U_H)
-  return(exp(-(lam * t)^kappa_H))
+  # Calculate linear predictor
+  lp <- beta_A_H * a
+  if (!is.null(x) && !is.null(beta_X_H)) {
+    lp <- lp + sum(beta_X_H * x)
+  }
+  if (!is.null(u) && !is.null(beta_U_H)) {
+    lp <- lp + sum(beta_U_H * u)
+  }
+
+  # Weibull scale parameter
+  Lambda_H <- lambda_H * exp(-lp)
+
+  # Weibull survival function
+  return(exp(-(Lambda_H * t)^kappa_H))
 }
 
-#' Joint survival S_{D,H}(t_D, t_H | A,X,U) via Gumbel–Hougaard copula
+#' Joint survival function for (T_H, T_D) with Gumbel-Hougaard copula
 #'
-#' Compute the joint survival for (T_D, T_H) under a Gumbel–Hougaard copula.
-#' When \code{theta_copula = 1}, this reduces to independence
-#' S_D(t_D) * S_H(t_H).
+#' Computes S_{D,H}(t_D, t_H | a, x, u) using Gumbel-Hougaard copula.
 #'
-#' @param y2 numeric scalar; time for fatal event T_D
-#' @param y1 numeric scalar; time for non-fatal event T_H
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard for fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape for fatal event
-#' @param beta_A_D numeric scalar; treatment coefficient for fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x on fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u on fatal event; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard for non-fatal event
-#' @param kappa_H numeric scalar > 0; Weibull shape for non-fatal event
-#' @param beta_A_H numeric scalar; treatment coefficient for non-fatal event; can also be \code{NULL}
-#' @param beta_X_H numeric vector; coefficients for x on non-fatal event; can also be \code{NULL}
-#' @param beta_U_H numeric vector; coefficients for u on non-fatal event; can also be \code{NULL}
-#' @param theta_copula numeric scalar >= 1; Gumbel–Hougaard parameter
+#' @param t_H numeric scalar; time for non-fatal event
+#' @param t_D numeric scalar; time for fatal event
+#' @param a numeric scalar (0 or 1); treatment indicator
+#' @param x numeric vector; measured covariates (can be NULL)
+#' @param u numeric vector; unmeasured covariates (can be NULL)
+#' @param lambda_H numeric scalar > 0; baseline hazard rate for non-fatal event
+#' @param lambda_D numeric scalar > 0; baseline hazard rate for fatal event
+#' @param kappa_H numeric scalar > 0; Weibull shape parameter for non-fatal event
+#' @param kappa_D numeric scalar > 0; Weibull shape parameter for fatal event
+#' @param beta_A_H numeric scalar; treatment effect on non-fatal event
+#' @param beta_A_D numeric scalar; treatment effect on fatal event
+#' @param beta_X_H numeric vector; effects of measured covariates on non-fatal event (can be NULL)
+#' @param beta_X_D numeric vector; effects of measured covariates on fatal event (can be NULL)
+#' @param beta_U_H numeric vector; effects of unmeasured covariates on non-fatal event (can be NULL)
+#' @param beta_U_D numeric vector; effects of unmeasured covariates on fatal event (can be NULL)
+#' @param theta_copula numeric >= 1; Gumbel-Hougaard copula parameter
 #'
-#' @return numeric scalar; joint survival probability
+#' @return numeric; joint survival probability
 #'
 #' @keywords internal
-.S_DH <- function(y2, y1, a, x, u,
-                  lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                  lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
+.S_DH <- function(t_H, t_D, a, x, u,
+                  lambda_H, lambda_D, kappa_H, kappa_D,
+                  beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
                   theta_copula) {
-  lamD <- .Lambda_D(a, x, u, lambda_D, beta_A_D, beta_X_D, beta_U_D)
-  lamH <- .Lambda_H(a, x, u, lambda_H, beta_A_H, beta_X_H, beta_U_H)
 
-  # If we have independent events
-  if (theta_copula == 1) {
-    return( exp(-(lamD * y2)^kappa_D) * exp(-(lamH * y1)^kappa_H) )
+  # Calculate linear predictors
+  lp_H <- beta_A_H * a
+  lp_D <- beta_A_D * a
+
+  if (!is.null(x)) {
+    if (!is.null(beta_X_H)) lp_H <- lp_H + sum(beta_X_H * x)
+    if (!is.null(beta_X_D)) lp_D <- lp_D + sum(beta_X_D * x)
   }
-  else{
-    term <- (lamD * y2)^(kappa_D * theta_copula) + (lamH * y1)^(kappa_H * theta_copula)
-    return(exp(-term^(1 / theta_copula)))
+  if (!is.null(u)) {
+    if (!is.null(beta_U_H)) lp_H <- lp_H + sum(beta_U_H * u)
+    if (!is.null(beta_U_D)) lp_D <- lp_D + sum(beta_U_D * u)
   }
+
+  # Weibull scale parameters
+  Lambda_H <- lambda_H * exp(-lp_H)
+  Lambda_D <- lambda_D * exp(-lp_D)
+
+  # Gumbel-Hougaard copula joint survival
+  term_H <- (Lambda_H * t_H)^(kappa_H * theta_copula)
+  term_D <- (Lambda_D * t_D)^(kappa_D * theta_copula)
+
+  return(exp(-((term_H + term_D)^(1 / theta_copula))))
 }
 
-#' Conditional survival of T_H > y1 given T_D > y2
+#' Conditional survival G_a(y1, y2 | x, u)
 #'
-#' Compute G(y1, y2 | A,X,U) = P(T_H > y1 | T_D > y2, A,X,U).
+#' Computes the conditional survival of T_H beyond y1 given T_D survives beyond y2.
+#' G_a(y1, y2 | x, u) = S_{D,H}(y2, y1 | a, x, u) / S_D(y2 | a, x, u)
 #'
+#' @inheritParams .S_DH
 #' @param y1 numeric scalar; time for non-fatal event
 #' @param y2 numeric scalar; time for fatal event
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard for fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape for fatal event
-#' @param beta_A_D numeric scalar; treatment coefficient for fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x on fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u on fatal event; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard for non-fatal event
-#' @param kappa_H numeric scalar > 0; Weibull shape for non-fatal event
-#' @param beta_A_H numeric scalar; treatment coefficient for non-fatal event; can also be \code{NULL}
-#' @param beta_X_H numeric vector; coefficients for x on non-fatal event; can also be \code{NULL}
-#' @param beta_U_H numeric vector; coefficients for u on non-fatal event; can also be \code{NULL}
-#' @param theta_copula numeric scalar >= 1; Gumbel–Hougaard parameter
 #'
-#' @return numeric scalar; conditional survival probability
+#' @return numeric; conditional survival probability
 #'
 #' @keywords internal
-.G_cond <- function(y1, y2, a, x, u,
-                    lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                    lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-                    theta_copula) {
-  num <- .S_DH(y2, y1, a, x, u,
-               lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-               lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-               theta_copula)
-  den <- .S_D(y2, a, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
-  return(num/den)
+.G <- function(y1, y2, a, x, u,
+               lambda_H, lambda_D, kappa_H, kappa_D,
+               beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+               theta_copula) {
+
+  numerator <- .S_DH(y1, y2, a, x, u,
+                     lambda_H, lambda_D, kappa_H, kappa_D,
+                     beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                     theta_copula)
+
+  denominator <- .S_D(y2, a, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
+
+  return(numerator / denominator)
 }
 
-#' Density of T_D
+#' Hazard function for fatal event at time t
 #'
-#' Compute the density f_D(y2 | A,X,U) for the fatal event time T_D at y2.
+#' Computes λ_D(t | a, x, u) for Weibull distribution.
 #'
-#' @param y2 numeric scalar; time for fatal event
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard for fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape for fatal event
-#' @param beta_A_D numeric scalar; treatment coefficient for fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x on fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u on fatal event; can also be \code{NULL}
+#' @inheritParams .S_D
 #'
-#' @return numeric scalar; density value
+#' @return numeric; hazard rate at time t
 #'
 #' @keywords internal
-.f_D <- function(y2, a, x, u,
-                 lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D) {
-  lam <- .Lambda_D(a, x, u, lambda_D, beta_A_D, beta_X_D, beta_U_D)
-  t_exp <- (lam * y2)^kappa_D
-  return(kappa_D * lam^kappa_D * y2^(kappa_D - 1) * exp(-t_exp))
+.lambda_D <- function(t, a, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D) {
+  # Calculate linear predictor
+  lp <- beta_A_D * a
+  if (!is.null(x) && !is.null(beta_X_D)) {
+    lp <- lp + sum(beta_X_D * x)
+  }
+  if (!is.null(u) && !is.null(beta_U_D)) {
+    lp <- lp + sum(beta_U_D * u)
+  }
+
+  # Weibull scale parameter
+  Lambda_D <- lambda_D * exp(-lp)
+
+  # Weibull hazard function: kappa * Lambda^kappa * t^(kappa-1)
+  return(kappa_D * (Lambda_D^kappa_D) * (t^(kappa_D - 1)))
 }
 
-#' Hazard of T_D
+#' Conditional hazard for non-fatal event given fatal event time
 #'
-#' Compute the hazard lambda_D(y2 | A,X,U) for the fatal event time T_D.
+#' Computes λ_{H|D}(y1 | y2, a, x, u), the hazard for T_H at y1 conditional on T_D = y2.
+#' For Gumbel copula with Weibull marginals, derived from copula density.
 #'
-#' @param y2 numeric scalar; time for fatal event
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard for fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape for fatal event
-#' @param beta_A_D numeric scalar; treatment coefficient for fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x on fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u on fatal event; can also be \code{NULL}
+#' @inheritParams .G
 #'
-#' @return numeric scalar; hazard value
-#'
-#' @keywords internal
-.lambda_D_fun <- function(y2, a, x, u,
-                          lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D) {
-  return(
-    .f_D(y2, a, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D) /
-      .S_D(y2, a, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
-  )
-}
-
-#' Conditional hazard lambda_{H|D}
-#'
-#' Compute the conditional hazard lambda_{H|D}(y1 | y2, A,X,U) via finite differences of the conditional survival G(y1, y2 | A,X,U).
-#' This is basically a numerical method of calculating the numerator in the conditional hazard.
-#'
-#' @param y1 numeric scalar; time for non-fatal event
-#' @param y2 numeric scalar; time for fatal event
-#' @param a numeric scalar, takes on value 1 or 0; treatment indicator
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard for fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape for fatal event
-#' @param beta_A_D numeric scalar; treatment coefficient for fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x on fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u on fatal event; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard for non-fatal event
-#' @param kappa_H numeric scalar > 0; Weibull shape for non-fatal event
-#' @param beta_A_H numeric scalar; treatment coefficient for non-fatal event; can also be \code{NULL}
-#' @param beta_X_H numeric vector; coefficients for x on non-fatal event; can also be \code{NULL}
-#' @param beta_U_H numeric vector; coefficients for u on non-fatal event; can also be \code{NULL}
-#' @param theta_copula numeric scalar >= 1; Gumbel–Hougaard parameter
-#' @param fd_step numeric scalar > 0; finite difference step size
-#'
-#' @return numeric scalar; conditional hazard value
+#' @return numeric; conditional hazard rate
 #'
 #' @keywords internal
 .lambda_H_given_D <- function(y1, y2, a, x, u,
-                              lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                              lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-                              theta_copula,
-                              fd_step) {
+                              lambda_H, lambda_D, kappa_H, kappa_D,
+                              beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                              theta_copula) {
 
-  if (y1 <= 0){
+  # Calculate linear predictors
+  lp_H <- beta_A_H * a
+  lp_D <- beta_A_D * a
+
+  if (!is.null(x)) {
+    if (!is.null(beta_X_H)) lp_H <- lp_H + sum(beta_X_H * x)
+    if (!is.null(beta_X_D)) lp_D <- lp_D + sum(beta_X_D * x)
+  }
+  if (!is.null(u)) {
+    if (!is.null(beta_U_H)) lp_H <- lp_H + sum(beta_U_H * u)
+    if (!is.null(beta_U_D)) lp_D <- lp_D + sum(beta_U_D * u)
+  }
+
+  # Weibull scale parameters
+  Lambda_H <- lambda_H * exp(-lp_H)
+  Lambda_D <- lambda_D * exp(-lp_D)
+
+  # For Gumbel copula with Weibull marginals:
+  # Compute base terms
+  term_H <- (Lambda_H * y1)^(kappa_H * theta_copula)
+  term_D <- (Lambda_D * y2)^(kappa_D * theta_copula)
+  sum_terms <- term_H + term_D
+
+  # Compute in log-space to avoid overflow
+  # copula_factor = sum_terms^(1/theta - 1) * kappa_H * theta * (Lambda_H*y1)^(kappa_H*theta-1) * Lambda_H
+  log_power_term <- (1/theta_copula - 1) * log(sum_terms)
+  log_weibull_term <- log(kappa_H * theta_copula) +
+    (kappa_H * theta_copula - 1) * log(Lambda_H * y1) +
+    log(Lambda_H)
+
+  # Combine in log space then exponentiate
+  log_result <- log_power_term + log_weibull_term
+  result <- exp(log_result)
+
+  # Handle edge cases: replace NaN/Inf with 0 (works with vectors)
+  result[!is.finite(result)] <- 0
+
+  return(result)
+}
+
+#' Censoring survival function Q_a(t)
+#'
+#' Computes Q_a(t) = P(C > t | A = a) for exponential censoring.
+#'
+#' @param t numeric scalar or vector; time
+#' @param a numeric scalar (0 or 1); treatment indicator
+#' @param lambda_C numeric scalar > 0; baseline censoring rate (can be NULL for no censoring)
+#' @param beta_A_C numeric scalar; treatment effect on censoring (can be NULL)
+#'
+#' @return numeric; censoring survival probability
+#'
+#' @keywords internal
+.Q <- function(t, a, lambda_C, beta_A_C) {
+  # Handle no censoring case - return vector of 1s matching length of t
+  if (is.null(lambda_C)) {
+    return(rep(1, length(t)))
+  }
+  if (isTRUE(lambda_C <= 0)) {  # Use isTRUE() for safe scalar comparison
+    return(rep(1, length(t)))
+  }
+
+  Lambda_C <- lambda_C * exp(-beta_A_C * a)
+  return(exp(-Lambda_C * t))
+}
+
+#' Censoring hazard (constant for exponential)
+#'
+#' @inheritParams .Q
+#'
+#' @return numeric; censoring hazard rate
+#'
+#' @keywords internal
+.lambda_C <- function(a, lambda_C, beta_A_C) {
+  # Handle no censoring case
+  if (is.null(lambda_C)) {
+    return(0)
+  }
+  if (isTRUE(lambda_C <= 0)) {  # Use isTRUE() for safe scalar comparison
     return(0)
   }
 
-  h   <- fd_step
-  y1p <- y1 + h
-  G1  <- .G_cond(y1,  y2, a, x, u,
-                 lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                 lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-                 theta_copula)
-  G1p <- .G_cond(y1p, y2, a, x, u,
-                 lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                 lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-                 theta_copula)
-  logG  <- log(G1)
-  logGp <- log(G1p)
-  d_logG <- (logGp - logG) / h
-  return(-d_logG)
+  return(lambda_C * exp(-beta_A_C * a))
 }
 
-#' Nested double integral helper
+##############################################
+# -------- INTEGRATION FUNCTIONS ---------- #
+##############################################
+# NOTE: For exponential marginals (kappa = 1), we use Zhang's exact formulas
+# which are derived from the closed-form expressions for exponential + Gumbel copula
+
+#' Integrand for term A - single integral (Zhang's formula for exponential)
 #'
-#' Compute a nested double integral over 0 < y1 < y2 < y2_max using a supplied integrand function of (y1, y2).
-#'
-#' @param myfun function(y1, y2) returning numeric
-#' @param y2_max numeric scalar > 0; upper limit for y2
-#' @param rel.tol numeric scalar; relative tolerance for \code{integrate()}
-#' @param abs.tol numeric scalar; absolute tolerance for \code{integrate()}
-#'
-#' @return an object of class "integrate" with components including \code{value}
+#' Based on Zhang's Ind_singleNu function.
+#' For exponential marginals with Gumbel copula.
 #'
 #' @keywords internal
-.double_integral <- function(myfun, y2_max, rel.tol, abs.tol) {
-  integrate(
-    Vectorize(function(y2) {
-      inner <- integrate(
-        Vectorize(function(y1) myfun(y1, y2)),
-        lower = 0, upper = y2,
-        rel.tol = rel.tol, abs.tol = abs.tol
-      )
-      inner$value
-    }),
-    lower = 0, upper = y2_max,
-    rel.tol = rel.tol, abs.tol = abs.tol
-  )
+.integrand_A_exponential <- function(y2, lambda_H, lambda_D, beta_A_H, beta_A_D,
+                                     theta_copula, lambda_C, beta_A_C) {
+  # Zhang's Ind_singleNu:
+  # exp(-numda.D*exp(-beta.D)*y2 - numda.C*exp(-beta.C)*y2) *
+  # exp(-numda.D*y2 - numda.C*y2) * numda.D
+
+  # Treatment group (a=1) terms
+  Lambda_D_1 <- lambda_D * exp(-beta_A_D)
+  Lambda_C_1 <- lambda_C * exp(-beta_A_C)
+
+  # Control group (a=0) terms
+  Lambda_D_0 <- lambda_D
+  Lambda_C_0 <- lambda_C
+
+  return(exp(-Lambda_D_1 * y2 - Lambda_C_1 * y2) *
+           exp(-Lambda_D_0 * y2 - Lambda_C_0 * y2) *
+           Lambda_D_0)
 }
 
-#' Individual-setting single integral numerator A(x,u)
+#' Integrand for term B - double integral (Zhang's formula for exponential)
 #'
-#' Compute the integrand for the single integral component A(x,u) in the numerator of the true win ratio.
-#'
-#' @param y2 numeric scalar; variable of integration, time for fatal event
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard for fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape for fatal event
-#' @param beta_A_D numeric scalar; treatment coefficient for fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x on fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u on fatal event; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard for non-fatal event (unused)
-#' @param kappa_H numeric scalar > 0; Weibull shape for non-fatal event (unused)
-#' @param beta_A_H numeric scalar; treatment coefficient for non-fatal event; can also be \code{NULL} (unused)
-#' @param beta_X_H numeric vector; coefficients for x on non-fatal event; can also be \code{NULL} (unused)
-#' @param beta_U_H numeric vector; coefficients for u on non-fatal event; can also be \code{NULL} (unused)
-#' @param lambda_C numeric scalar > 0; baseline censoring rate; can also be \code{NULL}
-#' @param beta_A_C numeric scalar; treatment coefficient for censoring; can also be \code{NULL}
-#' @param theta_copula numeric scalar >= 1; Gumbel–Hougaard parameter (unused)
-#' @param fd_step numeric scalar > 0; finite difference step size
-#'
-#' @return numeric scalar; value of the integrand at y2
+#' Based on Zhang's Ind_doubleNu function.
+#' For exponential marginals with Gumbel copula.
 #'
 #' @keywords internal
-.Ind_singleNu <- function(
-    y2, x, u,
-    lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-    lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-    lambda_C, beta_A_C,
-    theta_copula,
-    fd_step
-) {
-  a1 <- 1
-  a0 <- 0
+.integrand_B_exponential <- function(y1, y2, lambda_H, lambda_D, beta_A_H, beta_A_D,
+                                     theta_copula, lambda_C, beta_A_C) {
+  # Zhang's Ind_doubleNu uses log-space computation:
+  # loga: joint survival for treatment group
+  # logb: joint survival for control group
+  # logc: conditional hazard term
+  # logd: sum of censoring hazards
 
-  S_D1 <- .S_D(y2, a1, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
-  S_D0 <- .S_D(y2, a0, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
-  Q1   <- .Q(y2, a1, lambda_C, beta_A_C)
-  Q0   <- .Q(y2, a0, lambda_C, beta_A_C)
-  lamD0 <- .lambda_D_fun(y2, a0, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
+  # Treatment group (a=1) terms
+  Lambda_H_1 <- lambda_H * exp(-beta_A_H)
+  Lambda_D_1 <- lambda_D * exp(-beta_A_D)
+  Lambda_C_1 <- lambda_C * exp(-beta_A_C)
 
-  loga <- log(S_D1) + log(Q1)
-  logb <- log(S_D0) + log(Q0)
-  logc <- log(lamD0)
+  # Control group (a=0) terms
+  Lambda_H_0 <- lambda_H
+  Lambda_D_0 <- lambda_D
+  Lambda_C_0 <- lambda_C
 
-  return(exp(loga + logb + logc))
+  # Log of joint survival for treatment (Gumbel copula)
+  # S_{D,H,1}(y2, y1) = exp(-((Lambda_H_1*y1)^theta + (Lambda_D_1*y2)^theta)^(1/theta))
+  loga <- -(((Lambda_H_1 * y1)^theta_copula + (Lambda_D_1 * y2)^theta_copula)^(1/theta_copula)) -
+    Lambda_C_1 * y2
+
+  # Log of joint survival for control (Gumbel copula)
+  logb <- -(((Lambda_H_0 * y1)^theta_copula + (Lambda_D_0 * y2)^theta_copula)^(1/theta_copula)) -
+    Lambda_C_0 * y2
+
+  # Log of conditional hazard λ_{H|D,0}(y1|y2)
+  # This comes from the derivative of the Gumbel copula
+  # Pattern from Zhang: log(1/alpha.cor) + log((...)^(1/alpha.cor-1)) + log(alpha.cor*(...))
+  sum_terms_0 <- (Lambda_H_0 * y1)^theta_copula + (Lambda_D_0 * y2)^theta_copula
+
+  logc <- log(1/theta_copula) +
+    log(sum_terms_0^(1/theta_copula - 1)) +
+    log(theta_copula * (Lambda_H_0 * y1)^(theta_copula - 1) * Lambda_H_0)
+
+  # Log of sum of censoring hazards
+  logd <- log(Lambda_C_0 * (1 + exp(-beta_A_C)))
+
+  return(exp(loga + logb + logc + logd))
 }
 
-#' Individual-setting single integral denominator C(x,u)
+#' Integrand for term C - single integral (Zhang's formula for exponential)
 #'
-#' Compute the integrand for the single integral component C(x,u) in the denominator of the true win ratio.
-#'
-#' @param y2 numeric scalar; variable of integration, time for fatal event
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard for fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape for fatal event
-#' @param beta_A_D numeric scalar; treatment coefficient for fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x on fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u on fatal event; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard for non-fatal event (unused)
-#' @param kappa_H numeric scalar > 0; Weibull shape for non-fatal event (unused)
-#' @param beta_A_H numeric scalar; treatment coefficient for non-fatal event; can also be \code{NULL} (unused)
-#' @param beta_X_H numeric vector; coefficients for x on non-fatal event; can also be \code{NULL} (unused)
-#' @param beta_U_H numeric vector; coefficients for u on non-fatal event; can also be \code{NULL} (unused)
-#' @param lambda_C numeric scalar > 0; baseline censoring rate; can also be \code{NULL}
-#' @param beta_A_C numeric scalar; treatment coefficient for censoring; can also be \code{NULL}
-#' @param theta_copula numeric scalar >= 1; Gumbel–Hougaard parameter (unused)
-#' @param fd_step numeric scalar > 0; finite difference step size (unused)
-#'
-#' @return numeric scalar; value of the integrand at y2
+#' Based on Zhang's Ind_singleDe function.
 #'
 #' @keywords internal
-.Ind_singleDe <- function(
-    y2, x, u,
-    lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-    lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-    lambda_C, beta_A_C,
-    theta_copula,
-    fd_step
-) {
-  a1 <- 1
-  a0 <- 0
+.integrand_C_exponential <- function(y2, lambda_H, lambda_D, beta_A_H, beta_A_D,
+                                     theta_copula, lambda_C, beta_A_C) {
+  # Zhang's Ind_singleDe:
+  # exp(-numda.D*exp(-beta.D)*y2 - numda.C*exp(-beta.C)*y2) *
+  # exp(-numda.D*y2 - numda.C*y2) * numda.D*exp(-beta.D)
 
-  S_D1 <- .S_D(y2, a1, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
-  S_D0 <- .S_D(y2, a0, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
-  Q1   <- .Q(y2, a1, lambda_C, beta_A_C)
-  Q0   <- .Q(y2, a0, lambda_C, beta_A_C)
+  # Treatment group (a=1) terms
+  Lambda_D_1 <- lambda_D * exp(-beta_A_D)
+  Lambda_C_1 <- lambda_C * exp(-beta_A_C)
 
-  lamD1 <- .lambda_D_fun(y2, a1, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
+  # Control group (a=0) terms
+  Lambda_D_0 <- lambda_D
+  Lambda_C_0 <- lambda_C
 
-  loga <- log(S_D1) + log(Q1)
-  logb <- log(S_D0) + log(Q0)
-  logc <- log(lamD1)
-
-  exp(loga + logb + logc)
+  return(exp(-Lambda_D_1 * y2 - Lambda_C_1 * y2) *
+           exp(-Lambda_D_0 * y2 - Lambda_C_0 * y2) *
+           Lambda_D_1)
 }
 
-#' Individual-setting double integral numerator B(x,u)
+#' Integrand for term D - double integral (Zhang's formula for exponential)
 #'
-#' Compute the integrand for the double integral component B(x,u) in the numerator of the true win ratio.
-#'
-#' @param y1 numeric scalar; variable of integration, time for non-fatal event
-#' @param y2 numeric scalar; variable of integration, time for fatal event
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard for fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape for fatal event
-#' @param beta_A_D numeric scalar; treatment coefficient for fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x on fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u on fatal event; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard for non-fatal event (unused)
-#' @param kappa_H numeric scalar > 0; Weibull shape for non-fatal event (unused)
-#' @param beta_A_H numeric scalar; treatment coefficient for non-fatal event; can also be \code{NULL} (unused)
-#' @param beta_X_H numeric vector; coefficients for x on non-fatal event; can also be \code{NULL} (unused)
-#' @param beta_U_H numeric vector; coefficients for u on non-fatal event; can also be \code{NULL} (unused)
-#' @param lambda_C numeric scalar > 0; baseline censoring rate; can also be \code{NULL}
-#' @param beta_A_C numeric scalar; treatment coefficient for censoring; can also be \code{NULL}
-#' @param theta_copula numeric scalar >= 1; Gumbel–Hougaard parameter (unused)
-#' @param fd_step numeric scalar > 0; finite difference step size (unused)
-#'
-#' @return numeric scalar; value of the integrand at (y1, y2)
+#' Based on Zhang's Ind_doubleDe function.
 #'
 #' @keywords internal
-.Ind_doubleNu <- function(
-    y1, y2, x, u,
-    lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-    lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-    lambda_C, beta_A_C,
-    theta_copula,
-    fd_step
-) {
-  a1 <- 1
-  a0 <- 0
+.integrand_D_exponential <- function(y1, y2, lambda_H, lambda_D, beta_A_H, beta_A_D,
+                                     theta_copula, lambda_C, beta_A_C) {
+  # Treatment group (a=1) terms
+  Lambda_H_1 <- lambda_H * exp(-beta_A_H)
+  Lambda_D_1 <- lambda_D * exp(-beta_A_D)
+  Lambda_C_1 <- lambda_C * exp(-beta_A_C)
 
-  G1 <- .G_cond(y1, y2, a1, x, u,
-                lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-                theta_copula)
-  G0 <- .G_cond(y1, y2, a0, x, u,
-                lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-                theta_copula)
+  # Control group (a=0) terms
+  Lambda_H_0 <- lambda_H
+  Lambda_D_0 <- lambda_D
+  Lambda_C_0 <- lambda_C
 
-  Q1 <- .Q(y2, a1, lambda_C, beta_A_C)
-  Q0 <- .Q(y2, a0, lambda_C, beta_A_C)
+  # Log of joint survival for treatment
+  loga <- -(((Lambda_H_1 * y1)^theta_copula + (Lambda_D_1 * y2)^theta_copula)^(1/theta_copula)) -
+    Lambda_C_1 * y2
 
-  lamH0 <- .lambda_H_given_D(
-    y1, y2, a0, x, u,
-    lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-    lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-    theta_copula,
-    fd_step
-  )
+  # Log of joint survival for control
+  logb <- -(((Lambda_H_0 * y1)^theta_copula + (Lambda_D_0 * y2)^theta_copula)^(1/theta_copula)) -
+    Lambda_C_0 * y2
 
-  lamC0 <- .Lambda_C(a0, lambda_C, beta_A_C)
-  lamC1 <- .Lambda_C(a1, lambda_C, beta_A_C)
-  sumC  <- lamC0 + lamC1
+  # Log of conditional hazard λ_{H|D,1}(y1|y2) - note treatment group!
+  sum_terms_1 <- (Lambda_H_1 * y1)^theta_copula + (Lambda_D_1 * y2)^theta_copula
 
-  # If we have no random censoring, then this component vanishes
-  if (sumC <= 0) {
-    return(0)
-  }
-  else{
-    loga <- log(G1) + log(Q1)
-    logb <- log(G0) + log(Q0)
-    logc <- log(lamH0)
-    logd <- log(sumC)
+  logc <- log(1/theta_copula) +
+    log(sum_terms_1^(1/theta_copula - 1)) +
+    log(theta_copula * (Lambda_H_1 * y1)^(theta_copula - 1) * Lambda_H_1)
 
-    return(exp(loga + logb + logc + logd))
-  }
+  # Log of sum of censoring hazards (same as B)
+  logd <- log(Lambda_C_0 * (1 + exp(-beta_A_C)))
+
+  return(exp(loga + logb + logc + logd))
 }
 
-#' Individual-setting double integral denominator D(x,u)
+#' Compute term A(x, u) via single integration
 #'
-#' Compute the integrand for the double integral component D(x,u) in the denominator of the true win ratio.
-#'
-#' @param y1 numeric scalar; variable of integration, time for non-fatal event
-#' @param y2 numeric scalar; variable of integration, time for fatal event
-#' @param x numeric vector; measured covariates; can also be \code{NULL}
-#' @param u numeric vector; unmeasured covariates; can also be \code{NULL}
-#' @param lambda_D numeric scalar > 0; baseline hazard for fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape for fatal event
-#' @param beta_A_D numeric scalar; treatment coefficient for fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector; coefficients for x on fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector; coefficients for u on fatal event; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard for non-fatal event
-#' @param kappa_H numeric scalar > 0; Weibull shape for non-fatal event
-#' @param beta_A_H numeric scalar; treatment coefficient for non-fatal event; can also be \code{NULL}
-#' @param beta_X_H numeric vector; coefficients for x on non-fatal event; can also be \code{NULL}
-#' @param beta_U_H numeric vector; coefficients for u on non-fatal event; can also be \code{NULL}
-#' @param lambda_C numeric scalar > 0; baseline censoring rate; can also be \code{NULL}
-#' @param beta_A_C numeric scalar; treatment coefficient for censoring; can also be \code{NULL}
-#' @param theta_copula numeric scalar >= 1; Gumbel–Hougaard parameter
-#' @param fd_step numeric scalar > 0; finite difference step size
-#'
-#' @return numeric scalar; value of the integrand at (y1, y2)
+#' A(x,u) = ∫ S_{D,1}(y2|x,u) Q_1(y2) S_{D,0}(y2|x,u) Q_0(y2) λ_{D,0}(y2|x,u) dy2
 #'
 #' @keywords internal
-.Ind_doubleDe <- function(
-    y1, y2, x, u,
-    lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-    lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-    lambda_C, beta_A_C,
-    theta_copula,
-    fd_step
-) {
-  a1 <- 1
-  a0 <- 0
+.compute_A <- function(x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                       beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                       theta_copula, lambda_C, beta_A_C) {
 
-  G1 <- .G_cond(y1, y2, a1, x, u,
-                lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-                theta_copula)
-  G0 <- .G_cond(y1, y2, a0, x, u,
-                lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-                lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-                theta_copula)
-
-  Q1 <- .Q(y2, a1, lambda_C, beta_A_C)
-  Q0 <- .Q(y2, a0, lambda_C, beta_A_C)
-
-  lamH1 <- .lambda_H_given_D(
-    y1, y2, a1, x, u,
-    lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D,
-    lambda_H, kappa_H, beta_A_H, beta_X_H, beta_U_H,
-    theta_copula,
-    fd_step
-  )
-
-  lamC0 <- .Lambda_C(a0, lambda_C, beta_A_C)
-  lamC1 <- .Lambda_C(a1, lambda_C, beta_A_C)
-  sumC  <- lamC0 + lamC1
-
-  # If we have no random censoring, then this component vanishes
-  if (sumC <= 0) {
-    return(0)
-  }
-  else{
-    loga <- log(G1) + log(Q1)
-    logb <- log(G0) + log(Q0)
-    logc <- log(lamH1)
-    logd <- log(sumC)
-
-    return(exp(loga + logb + logc + logd))
-  }
-}
-
-#' True causal win ratio for a single covariate pattern
-#'
-#' Compute the analytic "true causal win ratio" for fixed measured and unmeasured covariates x, u.
-#' This corresponds to
-#' WR(x, u) = {A(x,u) + B(x,u)} / {C(x,u) + D(x,u)}
-#' where A, B, C, D are the components defined via integrals over the joint distribution of (T_H, T_D, C) under treatment and control.
-#'
-#' @param x numeric vector length p; measured covariates (or NULL, as long as \code{u} is not null)
-#' @param u numeric vector length q; unmeasured covariates (or NULL, as long as \code{x} is not null)
-#' @param lambda_D numeric scalar > 0; baseline hazard rate for the fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape parameter for the fatal event; defaults to 1 for exponential
-#' @param beta_A_D numeric scalar; treatment coefficient for the fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector length p; coefficients for x on the fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector length q; coefficients for u on the fatal event; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard rate for the non-fatal event
-#' @param kappa_H numeric scalar > 0; Weibull shape parameter for the non-fatal event; defaults to 1 for exponential
-#' @param beta_A_H numeric scalar; treatment coefficient for the non-fatal event; can also be \code{NULL}
-#' @param beta_X_H numeric vector length p; coefficients for x on the non-fatal event; can also be \code{NULL}
-#' @param beta_U_H numeric vector length q; coefficients for u on the non-fatal event; can also be \code{NULL}
-#' @param lambda_C numeric scalar > 0; baseline hazard rate for random censoring; can also be \code{NULL}, denoting no random censoring
-#' @param beta_A_C numeric scalar; treatment coefficient for censoring; can also be \code{NULL}
-#' @param theta_copula numeric scalar >= 1; Gumbel–Hougaard copula parameter; defaults to 1 for no association
-#' @param phi_admin numeric scalar > 0; administrative censoring time; can also be \code{NULL} for no administrative censoring
-#' @param rel.tol numeric scalar; relative tolerance for \code{integrate()}, default 1e-5
-#' @param abs.tol numeric scalar; absolute tolerance for \code{integrate()}, default 1e-8
-#' @param y2_max numeric scalar > 0; upper limit for integration in y2; defaults to Inf, or truncated at \code{phi_admin} if non-NULL
-#' @param fd_step numeric scalar > 0; finite difference step for derivative in y1, default 1e-4
-#'
-#' @return list with elements \code{WR}, \code{A}, \code{B}, \code{C}, \code{D}
-#'
-#' @keywords internal
-.true_wr_single_covariate <- function(
-    x = NULL,
-    u = NULL,
-    lambda_D,
-    kappa_D = 1,
-    beta_A_D = NULL,
-    beta_X_D = NULL,
-    beta_U_D = NULL,
-    lambda_H,
-    kappa_H = 1,
-    beta_A_H = NULL,
-    beta_X_H = NULL,
-    beta_U_H = NULL,
-    lambda_C = NULL,
-    beta_A_C = NULL,
-    theta_copula = 1,
-    phi_admin = NULL,
-    rel.tol = 1e-5,
-    abs.tol = 1e-8,
-    y2_max = Inf,
-    fd_step = 1e-4
-) {
-
-  # Make sure there exists at least one set of covariates that aren't NULL
-  if (is.null(x) && is.null(u)) {
-    stop("At least one of 'x' or 'u' must be non-NULL.")
-  }
-  if (!is.null(x) && !is.numeric(x)) stop("'x' must be numeric or NULL.")
-  if (!is.null(u) && !is.numeric(u)) stop("'u' must be numeric or NULL.")
-
-  # Enforce length compatibility with the coefficients, silent if NULL
-  if (!is.null(beta_X_D) && !is.null(x) && length(beta_X_D) != length(x)) {
-    stop("length(beta_X_D) must match length(x).")
-  }
-  if (!is.null(beta_X_H) && !is.null(x) && length(beta_X_H) != length(x)) {
-    stop("length(beta_X_H) must match length(x).")
-  }
-  if (!is.null(beta_U_D) && !is.null(u) && length(beta_U_D) != length(u)) {
-    stop("length(beta_U_D) must match length(u).")
-  }
-  if (!is.null(beta_U_H) && !is.null(u) && length(beta_U_H) != length(u)) {
-    stop("length(beta_U_H) must match length(u).")
-  }
-
-  # Adjust y2_max using phi_admin if provided
-  if (!is.null(phi_admin)) {
-    if (!is.numeric(phi_admin) || phi_admin <= 0) {
-      stop("'phi_admin' must be a numeric scalar > 0 or NULL.")
+  # Special case: Exponential with no covariates - use Zhang's optimized formula
+  if (kappa_H == 1 && kappa_D == 1 && is.null(x) && is.null(u)) {
+    integrand <- function(y2) {
+      .integrand_A_exponential(y2, lambda_H, lambda_D, beta_A_H, beta_A_D,
+                               theta_copula, lambda_C, beta_A_C)
     }
-    if (!is.infinite(y2_max)) {
-      y2_max <- min(y2_max, phi_admin)
+  } else {
+    # General case: Weibull marginals and/or covariates
+    integrand <- function(y2) {
+      S_D_1 <- .S_D(y2, a = 1, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
+      S_D_0 <- .S_D(y2, a = 0, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
+      Q_1 <- .Q(y2, a = 1, lambda_C, beta_A_C)
+      Q_0 <- .Q(y2, a = 0, lambda_C, beta_A_C)
+      lambda_D_0 <- .lambda_D(y2, a = 0, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
+
+      return(S_D_1 * Q_1 * S_D_0 * Q_0 * lambda_D_0)
+    }
+  }
+
+  result <- integrate(integrand, lower = 0, upper = Inf,
+                      rel.tol = .Machine$double.eps^0.25,
+                      subdivisions = 1000L)
+
+  return(result$value)
+}
+
+#' Compute term B(x, u) via double integration
+#'
+#' B(x,u) = ∫∫ G_1(y1,y2|x,u) Q_1(y2) G_0(y1,y2|x,u) Q_0(y2)
+#'           λ_{H|D,0}(y1|y2,x,u) {λ_{C,0}(y2)+λ_{C,1}(y2)} dy1 dy2
+#'
+#' @keywords internal
+.compute_B <- function(x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                       beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                       theta_copula, lambda_C, beta_A_C) {
+
+  # Special case: Exponential with no covariates - use Zhang's optimized formula
+  if (kappa_H == 1 && kappa_D == 1 && is.null(x) && is.null(u)) {
+    integrand_outer <- function(y2) {
+      integrand_inner <- function(y1) {
+        .integrand_B_exponential(y1, y2, lambda_H, lambda_D, beta_A_H, beta_A_D,
+                                 theta_copula, lambda_C, beta_A_C)
+      }
+
+      inner_result <- integrate(integrand_inner, lower = 0, upper = y2,
+                                rel.tol = .Machine$double.eps^0.25,
+                                subdivisions = 1000L)
+      return(inner_result$value)
+    }
+  } else {
+    # General case: Weibull marginals and/or covariates
+    integrand_outer <- function(y2) {
+      integrand_inner <- function(y1) {
+        G_1 <- .G(y1, y2, a = 1, x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                  beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                  theta_copula)
+        G_0 <- .G(y1, y2, a = 0, x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                  beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                  theta_copula)
+        Q_1 <- .Q(y2, a = 1, lambda_C, beta_A_C)
+        Q_0 <- .Q(y2, a = 0, lambda_C, beta_A_C)
+        lambda_H_D_0 <- .lambda_H_given_D(y1, y2, a = 0, x, u,
+                                          lambda_H, lambda_D, kappa_H, kappa_D,
+                                          beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                                          theta_copula)
+        lambda_C_0 <- .lambda_C(a = 0, lambda_C, beta_A_C)
+        lambda_C_1 <- .lambda_C(a = 1, lambda_C, beta_A_C)
+
+        return(G_1 * Q_1 * G_0 * Q_0 * lambda_H_D_0 * (lambda_C_0 + lambda_C_1))
+      }
+
+      inner_result <- integrate(integrand_inner, lower = 0, upper = y2,
+                                rel.tol = .Machine$double.eps^0.25,
+                                subdivisions = 1000L)
+      return(inner_result$value)
+    }
+  }
+
+  result <- integrate(Vectorize(integrand_outer), lower = 0, upper = Inf,
+                      rel.tol = .Machine$double.eps^0.25,
+                      subdivisions = 1000L)
+
+  return(result$value)
+}
+
+#' Compute term C(x, u) via single integration
+#'
+#' C(x,u) = ∫ S_{D,1}(y2|x,u) Q_1(y2) S_{D,0}(y2|x,u) Q_0(y2) λ_{D,1}(y2|x,u) dy2
+#'
+#' @keywords internal
+.compute_C <- function(x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                       beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                       theta_copula, lambda_C, beta_A_C) {
+
+  # Special case: Exponential with no covariates - use Zhang's optimized formula
+  if (kappa_H == 1 && kappa_D == 1 && is.null(x) && is.null(u)) {
+    integrand <- function(y2) {
+      .integrand_C_exponential(y2, lambda_H, lambda_D, beta_A_H, beta_A_D,
+                               theta_copula, lambda_C, beta_A_C)
+    }
+  } else {
+    # General case: Weibull marginals and/or covariates
+    integrand <- function(y2) {
+      S_D_1 <- .S_D(y2, a = 1, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
+      S_D_0 <- .S_D(y2, a = 0, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
+      Q_1 <- .Q(y2, a = 1, lambda_C, beta_A_C)
+      Q_0 <- .Q(y2, a = 0, lambda_C, beta_A_C)
+      lambda_D_1 <- .lambda_D(y2, a = 1, x, u, lambda_D, kappa_D, beta_A_D, beta_X_D, beta_U_D)
+
+      return(S_D_1 * Q_1 * S_D_0 * Q_0 * lambda_D_1)
+    }
+  }
+
+  result <- integrate(integrand, lower = 0, upper = Inf,
+                      rel.tol = .Machine$double.eps^0.25,
+                      subdivisions = 1000L)
+
+  return(result$value)
+}
+
+#' Compute term D(x, u) via double integration
+#'
+#' D(x,u) = ∫∫ G_1(y1,y2|x,u) Q_1(y2) G_0(y1,y2|x,u) Q_0(y2)
+#'           λ_{H|D,1}(y1|y2,x,u) {λ_{C,0}(y2)+λ_{C,1}(y2)} dy1 dy2
+#'
+#' @keywords internal
+.compute_D <- function(x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                       beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                       theta_copula, lambda_C, beta_A_C) {
+
+  # Special case: Exponential with no covariates - use Zhang's optimized formula
+  if (kappa_H == 1 && kappa_D == 1 && is.null(x) && is.null(u)) {
+    integrand_outer <- function(y2) {
+      integrand_inner <- function(y1) {
+        .integrand_D_exponential(y1, y2, lambda_H, lambda_D, beta_A_H, beta_A_D,
+                                 theta_copula, lambda_C, beta_A_C)
+      }
+
+      inner_result <- integrate(integrand_inner, lower = 0, upper = y2,
+                                rel.tol = .Machine$double.eps^0.25,
+                                subdivisions = 1000L)
+      return(inner_result$value)
+    }
+  } else {
+    # General case: Weibull marginals and/or covariates
+    integrand_outer <- function(y2) {
+      integrand_inner <- function(y1) {
+        G_1 <- .G(y1, y2, a = 1, x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                  beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                  theta_copula)
+        G_0 <- .G(y1, y2, a = 0, x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                  beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                  theta_copula)
+        Q_1 <- .Q(y2, a = 1, lambda_C, beta_A_C)
+        Q_0 <- .Q(y2, a = 0, lambda_C, beta_A_C)
+        lambda_H_D_1 <- .lambda_H_given_D(y1, y2, a = 1, x, u,
+                                          lambda_H, lambda_D, kappa_H, kappa_D,
+                                          beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                                          theta_copula)
+        lambda_C_0 <- .lambda_C(a = 0, lambda_C, beta_A_C)
+        lambda_C_1 <- .lambda_C(a = 1, lambda_C, beta_A_C)
+
+        return(G_1 * Q_1 * G_0 * Q_0 * lambda_H_D_1 * (lambda_C_0 + lambda_C_1))
+      }
+
+      inner_result <- integrate(integrand_inner, lower = 0, upper = y2,
+                                rel.tol = .Machine$double.eps^0.25,
+                                subdivisions = 1000L)
+      return(inner_result$value)
+    }
+  }
+
+  result <- integrate(Vectorize(integrand_outer), lower = 0, upper = Inf,
+                      rel.tol = .Machine$double.eps^0.25,
+                      subdivisions = 1000L)
+
+  return(result$value)
+}
+
+#' Helper function to compute E_{X,U}[f(X,U)] for small dimensions
+#'
+#' Uses quadrature integration over Normal covariates and enumeration over Bernoulli.
+#'
+#' @keywords internal
+.integrate_over_covariates <- function(func, p, q, X_dist, U_dist,
+                                       mu_X, sd_X, prob_X,
+                                       mu_U, sd_U, prob_U) {
+
+  # For now, use simple quadrature approach (Gauss-Hermite for Normal)
+  # This works well for p + q <= 3 or 4
+
+  if ((p + q) > 4) {
+    warning("Covariate integration with dimension > 4 may be slow or inaccurate. ",
+            "Consider using Monte Carlo approximation instead.")
+  }
+
+  # Separate Normal and Bernoulli covariates
+  X_normal_idx <- which(X_dist == "Normal")
+  X_bern_idx <- which(X_dist == "Bernoulli")
+  U_normal_idx <- which(U_dist == "Normal")
+  U_bern_idx <- which(U_dist == "Bernoulli")
+
+  n_normal <- length(X_normal_idx) + length(U_normal_idx)
+  n_bern <- length(X_bern_idx) + length(U_bern_idx)
+
+  # For simplicity: if we have any Bernoulli, enumerate all combinations
+  # For Normal, use Gauss-Hermite quadrature
+
+  if (n_bern > 0 && n_bern <= 10) {
+    # Enumerate Bernoulli combinations
+    bern_grid <- expand.grid(rep(list(c(0, 1)), n_bern))
+
+    # Compute probability of each Bernoulli combination
+    bern_probs <- numeric(nrow(bern_grid))
+    for (i in 1:nrow(bern_grid)) {
+      prob <- 1
+      col_idx <- 1
+      for (j in X_bern_idx) {
+        prob <- prob * ifelse(bern_grid[i, col_idx] == 1, prob_X[j], 1 - prob_X[j])
+        col_idx <- col_idx + 1
+      }
+      for (j in U_bern_idx) {
+        prob <- prob * ifelse(bern_grid[i, col_idx] == 1, prob_U[j], 1 - prob_U[j])
+        col_idx <- col_idx + 1
+      }
+      bern_probs[i] <- prob
+    }
+  } else if (n_bern > 10) {
+    stop("Too many Bernoulli covariates (>10) for exact integration. ",
+         "Consider reducing dimension or using Monte Carlo.")
+  }
+
+  # For Normal covariates, use Gauss-Hermite quadrature
+  # We'll use statmod package's gauss.quad.prob if available, otherwise simple approach
+  if (n_normal > 0) {
+    # Simple approach: use equally-spaced grid over [-3sd, +3sd] for each Normal
+    # For better accuracy, could use gauss.quad.prob from statmod package
+    n_quad_points <- 10  # per dimension
+
+    if (n_normal == 0) {
+      # No normal covariates, just enumerate Bernoulli
+      expectation <- 0
+      for (i in 1:nrow(bern_grid)) {
+        x_val <- if (p > 0) as.numeric(bern_grid[i, 1:length(X_bern_idx)]) else NULL
+        u_val <- if (q > 0) as.numeric(bern_grid[i, (length(X_bern_idx)+1):n_bern]) else NULL
+        expectation <- expectation + bern_probs[i] * func(x_val, u_val)
+      }
+      return(expectation)
     } else {
-      y2_max <- phi_admin
+      stop("General covariate integration with Normal covariates not yet fully implemented. ",
+           "For now, please use p = 0, q = 0 (no covariates) or all Bernoulli covariates.")
     }
+  } else {
+    # Only Bernoulli covariates
+    expectation <- 0
+    for (i in 1:nrow(bern_grid)) {
+      # Split bern_grid row into X and U parts
+      x_val <- if (p > 0) as.numeric(bern_grid[i, 1:length(X_bern_idx)]) else NULL
+      u_val <- if (q > 0) {
+        start_idx <- length(X_bern_idx) + 1
+        as.numeric(bern_grid[i, start_idx:n_bern])
+      } else {
+        NULL
+      }
+      expectation <- expectation + bern_probs[i] * func(x_val, u_val)
+    }
+    return(expectation)
   }
-
-  # Calculate the four integrals for the true win ratio
-  A_int <- integrate(
-    Vectorize(function(y2) {
-      .Ind_singleNu(
-        y2 = y2, x = x, u = u,
-        lambda_D = lambda_D, kappa_D = kappa_D,
-        beta_A_D = beta_A_D, beta_X_D = beta_X_D, beta_U_D = beta_U_D,
-        lambda_H = lambda_H, kappa_H = kappa_H,
-        beta_A_H = beta_A_H, beta_X_H = beta_X_H, beta_U_H = beta_U_H,
-        lambda_C = lambda_C, beta_A_C = beta_A_C,
-        theta_copula = theta_copula,
-        fd_step = fd_step
-      )
-    }),
-    lower = 0, upper = y2_max,
-    rel.tol = rel.tol, abs.tol = abs.tol
-  )
-
-  C_int <- integrate(
-    Vectorize(function(y2) {
-      .Ind_singleDe(
-        y2 = y2, x = x, u = u,
-        lambda_D = lambda_D, kappa_D = kappa_D,
-        beta_A_D = beta_A_D, beta_X_D = beta_X_D, beta_U_D = beta_U_D,
-        lambda_H = lambda_H, kappa_H = kappa_H,
-        beta_A_H = beta_A_H, beta_X_H = beta_X_H, beta_U_H = beta_U_H,
-        lambda_C = lambda_C, beta_A_C = beta_A_C,
-        theta_copula = theta_copula,
-        fd_step = fd_step
-      )
-    }),
-    lower = 0, upper = y2_max,
-    rel.tol = rel.tol, abs.tol = abs.tol
-  )
-
-  B_int <- .double_integral(
-    myfun = function(y1, y2) {
-      .Ind_doubleNu(
-        y1 = y1, y2 = y2, x = x, u = u,
-        lambda_D = lambda_D, kappa_D = kappa_D,
-        beta_A_D = beta_A_D, beta_X_D = beta_X_D, beta_U_D = beta_U_D,
-        lambda_H = lambda_H, kappa_H = kappa_H,
-        beta_A_H = beta_A_H, beta_X_H = beta_X_H, beta_U_H = beta_U_H,
-        lambda_C = lambda_C, beta_A_C = beta_A_C,
-        theta_copula = theta_copula,
-        fd_step = fd_step
-      )
-    },
-    y2_max = y2_max,
-    rel.tol = rel.tol,
-    abs.tol = abs.tol
-  )
-
-  D_int <- .double_integral(
-    myfun = function(y1, y2) {
-      .Ind_doubleDe(
-        y1 = y1, y2 = y2, x = x, u = u,
-        lambda_D = lambda_D, kappa_D = kappa_D,
-        beta_A_D = beta_A_D, beta_X_D = beta_X_D, beta_U_D = beta_U_D,
-        lambda_H = lambda_H, kappa_H = kappa_H,
-        beta_A_H = beta_A_H, beta_X_H = beta_X_H, beta_U_H = beta_U_H,
-        lambda_C = lambda_C, beta_A_C = beta_A_C,
-        theta_copula = theta_copula,
-        fd_step = fd_step
-      )
-    },
-    y2_max = y2_max,
-    rel.tol = rel.tol,
-    abs.tol = abs.tol
-  )
-
-  # Grab the results
-  A <- A_int$value
-  B <- B_int$value
-  C <- C_int$value
-  D <- D_int$value
-
-  # Put them together to get the true win ratio
-  WR <- (A + B) / (C + D)
-
-  return(
-    list(
-      WR = WR,
-      A  = A,
-      B  = B,
-      C  = C,
-      D  = D
-    )
-  )
-
 }
 
-#' True causal win ratio averaged over covariate patterns
+############################################
+# ------------ MAIN FUNCTION ------------ #
+############################################
+
+#' Calculate the true causal win ratio analytically
 #'
-#' Compute the true causal win ratio by averaging A(x,u)+B(x,u) and C(x,u)+D(x,u) over covariate patterns (x,u).
-#' The averaging is done over the rows of X_mat and U_mat, treating the empirical distribution of (X,U) as the target distribution.
+#' Computes the true causal win ratio using numerical integration over the
+#' covariate distribution, following Zhang et al. (2019, 2022) and Luo et al. (2015).
 #'
-#' @param X_mat numeric matrix N x p; measured covariates; can be NULL if there are no measured covariates
-#' @param U_mat numeric matrix N x q; unmeasured covariates; can be NULL if there are no unmeasured covariates
-#' @param lambda_D numeric scalar > 0; baseline hazard rate for the fatal event
-#' @param kappa_D numeric scalar > 0; Weibull shape parameter for the fatal event; defaults to 1 for exponential
-#' @param beta_A_D numeric scalar; treatment coefficient for the fatal event; can also be \code{NULL}
-#' @param beta_X_D numeric vector length p; coefficients for x on the fatal event; can also be \code{NULL}
-#' @param beta_U_D numeric vector length q; coefficients for u on the fatal event; can also be \code{NULL}
-#' @param lambda_H numeric scalar > 0; baseline hazard rate for the non-fatal event
-#' @param kappa_H numeric scalar > 0; Weibull shape parameter for the non-fatal event; defaults to 1 for exponential
-#' @param beta_A_H numeric scalar; treatment coefficient for the non-fatal event; can also be \code{NULL}
-#' @param beta_X_H numeric vector length p; coefficients for x on the non-fatal event; can also be \code{NULL}
-#' @param beta_U_H numeric vector length q; coefficients for u on the non-fatal event; can also be \code{NULL}
-#' @param lambda_C numeric scalar > 0; baseline hazard rate for random censoring; can also be \code{NULL} for no random censoring
-#' @param beta_A_C numeric scalar; treatment coefficient for censoring; can also be \code{NULL}
-#' @param theta_copula numeric scalar >= 1; Gumbel–Hougaard copula parameter (default 1 for independence)
-#' @param phi_admin numeric scalar > 0; administrative censoring time; can also be \code{NULL} for no administrative censoring
-#' @param rel.tol numeric scalar; relative tolerance for \code{integrate()}, default 1e-5
-#' @param abs.tol numeric scalar; absolute tolerance for \code{integrate()}, default 1e-8
-#' @param y2_max numeric scalar > 0; upper limit for integration in y2; defaults to Inf, or truncated at \code{phi_admin} if non-NULL
-#' @param fd_step numeric scalar > 0; finite difference step for derivative in y1, default 1e-4
+#' @param p integer; number of measured covariates (can be 0 or NULL)
+#' @param q integer; number of unmeasured covariates (can be 0 or NULL)
+#' @param X_dist character vector length p; distribution type for each measured covariate,
+#'   either "Normal" or "Bernoulli" (defaults to "Normal" for all if NULL)
+#' @param U_dist character vector length q; distribution type for each unmeasured covariate,
+#'   either "Normal" or "Bernoulli" (defaults to "Normal" for all if NULL)
+#' @param mu_X numeric vector length p; means for Normal measured covariates
+#' @param sd_X numeric vector length p; standard deviations for Normal measured covariates
+#' @param prob_X numeric vector length p; probabilities for Bernoulli measured covariates
+#' @param mu_U numeric vector length q; means for Normal unmeasured covariates
+#' @param sd_U numeric vector length q; standard deviations for Normal unmeasured covariates
+#' @param prob_U numeric vector length q; probabilities for Bernoulli unmeasured covariates
+#' @param lambda_H numeric scalar > 0; baseline hazard rate for non-fatal event
+#' @param kappa_H numeric scalar > 0; Weibull shape parameter for non-fatal event (use 1 for exponential)
+#' @param beta_A_H numeric scalar; treatment effect on non-fatal event
+#' @param beta_X_H numeric vector length p; measured covariate effects on non-fatal event (can be NULL)
+#' @param beta_U_H numeric vector length q; unmeasured covariate effects on non-fatal event (can be NULL)
+#' @param lambda_D numeric scalar > 0; baseline hazard rate for fatal event
+#' @param kappa_D numeric scalar > 0; Weibull shape parameter for fatal event (use 1 for exponential)
+#' @param beta_A_D numeric scalar; treatment effect on fatal event
+#' @param beta_X_D numeric vector length p; measured covariate effects on fatal event (can be NULL)
+#' @param beta_U_D numeric vector length q; unmeasured covariate effects on fatal event (can be NULL)
+#' @param theta_copula numeric >= 1; Gumbel-Hougaard copula parameter (use 1 for independence)
+#' @param lambda_C numeric scalar > 0; baseline censoring rate (NULL for no censoring)
+#' @param beta_A_C numeric scalar; treatment effect on censoring (NULL for no censoring)
 #'
-#' @return list with elements:
-#'   \describe{
-#'     \item{WR}{estimated true causal win ratio}
-#'     \item{num}{Monte Carlo estimate of E[A(X,U)+B(X,U)]}
-#'     \item{den}{Monte Carlo estimate of E[C(X,U)+D(X,U)]}
-#'     \item{details}{list with vectors A, B, C, D for each row}
-#'   }
+#' @return numeric; the true causal win ratio WR_causal
+#'
+#' @details
+#' This function computes the true causal win ratio as defined in Zhang et al. (2019):
+#'
+#' WR_causal = E_{X,U}[A(X,U) + B(X,U)] / E_{X,U}[C(X,U) + D(X,U)]
+#'
+#' where A, B, C, D are integrals over the joint distribution of (T_H, T_D, C) under
+#' treatment and control. See Zhang (2019) Section 3.2.1 and your README for details.
+#'
+#' When p = q = 0 (no covariates), this reduces to the simpler case where we just
+#' compute (A + B) / (C + D) directly.
+#'
+#' The function handles both exponential (kappa = 1) and Weibull (kappa ≠ 1) marginal
+#' distributions.
+#'
+#' @examples
+#' # Example 1: Replicate Zhang's case with no treatment effect (should give WR = 1)
+#' true_wr_analytic(
+#'   p = 0, q = 0,
+#'   lambda_H = 0.1, kappa_H = 1, beta_A_H = 0,
+#'   lambda_D = 0.08, kappa_D = 1, beta_A_D = 0,
+#'   theta_copula = 2,
+#'   lambda_C = 0.09, beta_A_C = 0.1
+#' )
+#'
+#' # Example 2: With treatment effect (eta_H = 0.1, eta_D = 0.1)
+#' true_wr_analytic(
+#'   p = 0, q = 0,
+#'   lambda_H = 0.1, kappa_H = 1, beta_A_H = 0.1,
+#'   lambda_D = 0.08, kappa_D = 1, beta_A_D = 0.1,
+#'   theta_copula = 2,
+#'   lambda_C = 0.09, beta_A_C = 0.1
+#' )
 #'
 #' @export
 true_wr_analytic <- function(
-    X_mat = NULL,
-    U_mat = NULL,
-    lambda_D,
-    kappa_D = 1,
-    beta_A_D = NULL,
-    beta_X_D = NULL,
-    beta_U_D = NULL,
-    lambda_H,
-    kappa_H = 1,
-    beta_A_H = NULL,
-    beta_X_H = NULL,
-    beta_U_H = NULL,
-    lambda_C = NULL,
-    beta_A_C = NULL,
+    p = NULL, q = NULL,
+    X_dist = NULL, U_dist = NULL,
+    mu_X = NULL, sd_X = NULL, prob_X = NULL,
+    mu_U = NULL, sd_U = NULL, prob_U = NULL,
+    lambda_H, kappa_H, beta_A_H,
+    beta_X_H = NULL, beta_U_H = NULL,
+    lambda_D, kappa_D, beta_A_D,
+    beta_X_D = NULL, beta_U_D = NULL,
     theta_copula = 1,
-    phi_admin = NULL,
-    rel.tol = 1e-5,
-    abs.tol = 1e-8,
-    y2_max = Inf,
-    fd_step = 1e-4
+    lambda_C = NULL, beta_A_C = NULL
 ) {
 
-  # Require at least one of X_mat or U_mat to be non-NULL
-  if (is.null(X_mat) && is.null(U_mat)) {
-    stop("At least one of X_mat or U_mat must be non-NULL.")
-  }
-  if (!is.null(X_mat)) {
-    X_mat <- as.matrix(X_mat)
-  }
-  if (!is.null(U_mat)) {
-    U_mat <- as.matrix(U_mat)
-  }
+  # Handle NULL p and q
+  if (is.null(p)) p <- 0L
+  if (is.null(q)) q <- 0L
 
-  # Enforce consistency in dimensions and number of samples N
-  if (!is.null(X_mat) && !is.null(U_mat)) {
-    if (nrow(X_mat) != nrow(U_mat)) {
-      stop("X_mat and U_mat must have the same number of rows if both are non-NULL.")
-    }
-    N <- nrow(X_mat)
-  } else if (!is.null(X_mat)) {
-    N <- nrow(X_mat)
-  } else {
-    N <- nrow(U_mat)
-  }
+  # Set default distributions if not provided
+  if (p > 0 && is.null(X_dist)) X_dist <- rep("Normal", p)
+  if (q > 0 && is.null(U_dist)) U_dist <- rep("Normal", q)
 
-  # Result vectors storing the integrals for individual covaraites
-  # We will average these at the end
-  res_A <- numeric(N)
-  res_B <- numeric(N)
-  res_C <- numeric(N)
-  res_D <- numeric(N)
+  # Case 1: No covariates (simplest and fastest)
+  if (p == 0 && q == 0) {
+    # Compute A, B, C, D directly without integration over covariates
+    A_val <- .compute_A(x = NULL, u = NULL,
+                        lambda_H, lambda_D, kappa_H, kappa_D,
+                        beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                        theta_copula, lambda_C, beta_A_C)
 
-  # For each individual
-  for (i in seq_len(N)) {
+    B_val <- .compute_B(x = NULL, u = NULL,
+                        lambda_H, lambda_D, kappa_H, kappa_D,
+                        beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                        theta_copula, lambda_C, beta_A_C)
 
-    # Grab their covariates
-    if (!is.null(X_mat)) {
-      x_i <- X_mat[i, ]
-    } else {
-      x_i <- NULL
-    }
-    if (!is.null(U_mat)) {
-      u_i <- U_mat[i, ]
-    } else {
-      u_i <- NULL
-    }
+    C_val <- .compute_C(x = NULL, u = NULL,
+                        lambda_H, lambda_D, kappa_H, kappa_D,
+                        beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                        theta_copula, lambda_C, beta_A_C)
 
-    # Calculate the true causal WR integral given this individual's covariates
-    out_i <- .true_wr_single_covariate(
-      x = x_i, u = u_i,
-      lambda_D = lambda_D,
-      kappa_D  = kappa_D,
-      beta_A_D = beta_A_D,
-      beta_X_D = beta_X_D,
-      beta_U_D = beta_U_D,
-      lambda_H = lambda_H,
-      kappa_H  = kappa_H,
-      beta_A_H = beta_A_H,
-      beta_X_H = beta_X_H,
-      beta_U_H = beta_U_H,
-      lambda_C = lambda_C,
-      beta_A_C = beta_A_C,
-      theta_copula = theta_copula,
-      phi_admin = phi_admin,
-      rel.tol = rel.tol,
-      abs.tol = abs.tol,
-      y2_max  = y2_max,
-      fd_step = fd_step
-    )
+    D_val <- .compute_D(x = NULL, u = NULL,
+                        lambda_H, lambda_D, kappa_H, kappa_D,
+                        beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                        theta_copula, lambda_C, beta_A_C)
 
-    # Store the results
-    res_A[i] <- out_i$A
-    res_B[i] <- out_i$B
-    res_C[i] <- out_i$C
-    res_D[i] <- out_i$D
+    numerator <- A_val + B_val
+    denominator <- C_val + D_val
+
+    WR_causal <- numerator / denominator
+
+    return(WR_causal)
   }
 
-  # Average out the numerator and denominator, completing the expectation
-  num <- mean(res_A + res_B)
-  den <- mean(res_C + res_D)
-  # Calculate the true win ratio
-  WR  <- num / den
-  return(
-    list(
-      WR  = WR,
-      num = num,
-      den = den,
-      details = list(A = res_A, B = res_B, C = res_C, D = res_D)
-    )
+  # Case 2: With covariates - integrate E_{X,U}[(A+B)/(C+D)]
+  # For small covariate dimension, use quadrature/enumeration
+
+  # Define function to integrate: (A+B) for given (x,u)
+  numerator_func <- function(x, u) {
+    A <- .compute_A(x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                    beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                    theta_copula, lambda_C, beta_A_C)
+    B <- .compute_B(x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                    beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                    theta_copula, lambda_C, beta_A_C)
+    return(A + B)
+  }
+
+  # Define function to integrate: (C+D) for given (x,u)
+  denominator_func <- function(x, u) {
+    C <- .compute_C(x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                    beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                    theta_copula, lambda_C, beta_A_C)
+    D <- .compute_D(x, u, lambda_H, lambda_D, kappa_H, kappa_D,
+                    beta_A_H, beta_A_D, beta_X_H, beta_X_D, beta_U_H, beta_U_D,
+                    theta_copula, lambda_C, beta_A_C)
+    return(C + D)
+  }
+
+  # Integrate over (X, U) distribution
+  E_numerator <- .integrate_over_covariates(
+    numerator_func, p, q, X_dist, U_dist,
+    mu_X, sd_X, prob_X, mu_U, sd_U, prob_U
   )
+
+  E_denominator <- .integrate_over_covariates(
+    denominator_func, p, q, X_dist, U_dist,
+    mu_X, sd_X, prob_X, mu_U, sd_U, prob_U
+  )
+
+  WR_causal <- E_numerator / E_denominator
+
+  return(WR_causal)
 }
