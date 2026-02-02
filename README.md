@@ -8,10 +8,11 @@
 
 This package is designed to support simulation studies investigating the performance of win ratio estimators in observational settings, particularly focusing on:
 
-- The impact of unmeasured confounding on bias
-- Non-proportional hazards scenarios
-- Effects of censoring mechanisms
 - Hierarchical composite outcomes with semi-competing risks
+- Measured/unmeasured confounding
+- Non-proportional hazards
+- Exponential and administrative censoring mechanisms
+
 
 The simulation framework builds on theoretical results from Zhang et al. (2021, 2022), Mao (2018, 2019, 2020), and Luo et al. (2015).
 
@@ -56,10 +57,6 @@ $$
 $$
 
 where $A$, $B$, $C$, $D$ are components derived from the joint distribution of $(T_H, T_D, C)$ under treatment and control (see Mathematical Details below).
-
-### `true_wr_monte_carlo()`
-
-Computes the true causal win ratio via Monte Carlo approximation by generating a large superpopulation and calculating the empirical population-level win ratio. As the superpopulation size increases, this converges to the analytical truth.
 
 ## Mathematical Details
 
@@ -225,7 +222,7 @@ $$
 \mathrm{WR}_{\text{causal}} = \frac{\mathbb{E}_{X,U}[A(X,U)+B(X,U)]}{\mathbb{E}_{X,U}[C(X,U)+D(X,U)]} = \frac{\int (A(x,u)+B(x,u)) f_{X,U}(x,u) dx du}{\int (C(x,u)+D(x,u)) f_{X,U}(x,u) dx du}
 $$
 
-As mentioned by Zhang, when there are a small number of covariates this expression can feasibly be calculated analytically using numerical integration. When the number of covariates is large, the integrals become intractable, and a Monte Carlo approach becomes more feasible.
+As mentioned by Zhang, when there are a small number of covariates this expression can feasibly be calculated analytically using numerical integration. When the number of covariates is large, the integrals become numerically intractable.
 
 ## References
 
